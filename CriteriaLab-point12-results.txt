@@ -1,0 +1,18 @@
+CriteriaLab — пункт 12: контроль преподавателя
+12 ноября 2026
+
+Метод: Node.js, JavaScript из CriteriaLab.html, имитация DOM. Реальная работа браузера и оформление не проверялись.
+
+1. PASS — Summary before confirmation; cancel and intervening edits prevent approval
+2. PASS — Incomplete assessment is listed in summary and cannot be approved
+3. PASS — Rejecting source, level, rubric changes and deletion preserves complete approved work
+4. PASS — One reset warning per editing session; undo restores original source and assessment, never approval
+5. PASS — Undo groups typed edits within a field; leaving a field starts a new undo step
+6. PASS — Score 3→4→undo restores visible input to 3 and total to 15/20, even after feedback assembly; returns to assessment
+7. PASS — Duplicate score input events do not overwrite undo with an unchanged score
+8. PASS — Comment edits are marked against the demo baseline and can be undone
+9. PASS — Undo restores deleted, added and excluded remarks
+10. PASS — Undo restores rubric edits, added/deleted criteria and the assessment cleared with them
+11. PASS — Reset and loading another work clear undo history
+
+Отмена на один шаг: редактирование одного поля группируется до потери фокуса. Данные восстанавливаются, подтверждение и актуальность отзыва не восстанавливаются. История не экспортируется, очищается при сбросе, загрузке другой работы и смене фото.

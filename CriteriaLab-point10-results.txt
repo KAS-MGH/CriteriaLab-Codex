@@ -1,0 +1,19 @@
+CriteriaLab — пункт 10: стабильность результата
+Дата: 12 ноября 2026
+
+Метод: выполнение JavaScript из CriteriaLab.html в Node.js с имитацией DOM. Проверены реальные обработчики, экспорт и импорт JSON; UI, реальное скачивание браузером и визуальный вид не проверялись.
+
+1. PASS — 10 navigation cycles: fields, descriptors, scores, comments, remarks and approval unchanged
+2. PASS — 10 repeated feedback builds: identical output
+3. PASS — Save button exports the complete snapshot as JSON
+4. PASS — 10 JSON save/import cycles: exact data restored; approval required; feedback reproduced
+5. PASS — Manual final feedback survives import; printing stays blocked until renewed feedback
+6. PASS — Malformed JSON and invalid scores do not replace the current work
+7. PASS — Cancelling replacement preserves the current draft
+8. PASS — Score edit and work-code edit preserve criterion data and require approval
+9. PASS — Descriptor edit retains the new descriptor and intentionally resets assessment
+10. PASS — Source-text edit intentionally clears assessment and text confirmation
+
+Вывод: перечисленные сценарии сохранения и повторяемости проходят. Сброс после правки исходного текста/дескрипторов предусмотрен текущим кодом, это не случайная потеря при переходе. После импорта требуется повторное подтверждение и сборка; ручная редактура отзыва сохраняется в файле, но повторная сборка заменяет её текстом из полей.
+
+Остаётся: ручная проверка в браузере на этом компьютере; повтор этих же тестов после изменений. ИИ/OCR отсутствуют, стабильность модели здесь не оценивалась. Автоматическое восстановление после закрытия вкладки отсутствует: нужен сохранённый JSON.

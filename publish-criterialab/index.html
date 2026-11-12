@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CriteriaLab — оценивание и обратная связь</title>
+<style>
+[hidden]{display:none!important}
+:root{--ink:#16304a;--muted:#64768a;--line:#dce5ed;--accent:#087e83;--bg:#f3f7fa}*{box-sizing:border-box}body{margin:0;font:16px/1.55 system-ui,Segoe UI,sans-serif;color:var(--ink);background:var(--bg)}header{background:#14324d;color:white;padding:30px max(24px,calc((100vw - 1120px)/2))}header p{color:#cfdee9;max-width:760px;margin:6px 0}.brand{font-size:30px;font-weight:800;letter-spacing:-1px}.brand span{color:#75d8cf}.badge{display:inline-block;border-radius:20px;background:#e5f5f2;color:#11645f;font-size:13px;padding:4px 12px;font-weight:650}main{max-width:1168px;margin:auto;padding:24px}.top{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.top .badge{margin-right:auto}button,.button{font:inherit;cursor:pointer;border:1px solid var(--line);background:white;color:var(--ink);padding:10px 17px;border-radius:9px;font-weight:650;text-decoration:none}button:hover{border-color:var(--accent)}button.primary{background:var(--accent);border-color:var(--accent);color:white}button:disabled{cursor:not-allowed;opacity:.45}nav{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:24px 0}nav button{text-align:left;padding:14px}nav button.active{background:#14324d;color:white;border-color:#14324d}nav small{display:block;font-weight:400;font-size:12px;opacity:.8}.panel{background:white;border:1px solid var(--line);border-radius:15px;padding:26px;margin-bottom:18px}h1{font-size:25px;margin:0 0 5px}h2{font-size:20px;margin:0 0 12px}h3{font-size:17px;margin:0 0 10px}.muted{color:var(--muted)}p{margin:8px 0 16px}.notice{padding:13px 16px;background:#eef5fb;border-left:3px solid #7aa5c6;border-radius:6px;margin:15px 0;font-size:14px}.warning{background:#fff7e6;border-color:#dba642}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}.three{grid-template-columns:repeat(3,1fr)}label{display:block;font-size:14px;font-weight:650;margin-bottom:13px}input,select,textarea{display:block;width:100%;border:1px solid #cbd7e1;border-radius:8px;padding:10px 12px;font:inherit;color:var(--ink);background:white;margin-top:6px}textarea{resize:vertical;min-height:85px}input:focus,textarea:focus,select:focus{outline:2px solid #84c9c6;outline-offset:1px}input[type=checkbox]{display:inline;width:auto;margin-right:8px}input[type=number]{max-width:110px}summary{cursor:pointer;font-weight:650}details{margin:14px 0}footer{max-width:1120px;margin:0 auto;padding:10px 24px 35px;font-size:13px;color:var(--muted)}.actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px;flex-wrap:wrap}.criterion,.remark{border:1px solid var(--line);border-radius:10px;padding:18px;margin:15px 0}.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.row h3{flex:1;margin:0}.score{font-size:25px;font-weight:800}.subtle{background:#f5f8fa;padding:12px;border-radius:7px;font-size:14px;margin:12px 0}.hidden{display:none!important}#previewPhoto{max-width:100%;max-height:380px;object-fit:contain}#feedback{min-height:470px}#status{min-height:25px;color:#08736d;font-weight:600;margin-top:12px}.remove{font-size:13px;padding:6px 10px;color:#914b39}.print-only{display:none}.page{display:none}.page.active{display:block}#printText{white-space:pre-wrap;overflow-wrap:anywhere}#printSheet h1{font-size:27px}a{color:var(--accent)}@media(max-width:650px){main{padding:14px}.panel{padding:18px}.grid,.three{grid-template-columns:1fr}nav{gap:5px}nav button{font-size:12px;padding:10px 6px}nav small{display:none}header{padding:24px}.top button{flex:1;font-size:13px}}@media print{@page{size:A4;margin:18mm}body{background:white;font-size:11pt;color:#182b3b}header,main,footer{display:none!important}.print-only{display:block!important}#printSheet{width:100%;padding:0}#printText{font:11pt/1.6 Georgia,serif}h1,h2{break-after:avoid}.print-meta{color:#526477;border-bottom:1px solid #ccd5dc;padding-bottom:12px;margin-bottom:20px}}
+/* Button presentation: local icons, keyboard focus and clear action hierarchy. */
+button,.button{min-height:46px;border-radius:12px;box-shadow:0 2px 4px #16304a08;transition:background .16s,border-color .16s,box-shadow .16s,transform .16s}
+button:not(:disabled):hover{background:#edf7f7;border-color:#6aafae;box-shadow:0 5px 12px #16304a12;transform:translateY(-1px)}
+button:not(:disabled):active{transform:translateY(1px);box-shadow:none}
+button:focus-visible,.button:focus-visible,input[type=file]:focus-visible{outline:3px solid #168b91;outline-offset:4px}
+button.primary{background:linear-gradient(135deg,#087e83,#07676e);border-color:#07676e;box-shadow:0 4px 10px #087e8329}
+button.primary:not(:disabled):hover{background:linear-gradient(135deg,#076b70,#064f57);border-color:#064f57;box-shadow:0 6px 16px #087e8333}
+button:disabled{opacity:1;background:#edf1f4!important;color:#718091!important;border-color:#dce3ea!important;box-shadow:none;transform:none}
+.btn-icon{width:19px;height:19px;display:inline-block;vertical-align:-4px;margin-right:8px;flex-shrink:0;pointer-events:none}
+#demo{background:#e8f1ff;color:#244c83;border-color:#bbcee9}
+#demo:not(:disabled):hover{background:#d9e8fc;border-color:#7c9fcf}
+#save,#downloadText{background:#e9f6ef;color:#236347;border-color:#b8d9c5}
+#save:not(:disabled):hover,#downloadText:not(:disabled):hover{background:#d9efdf;border-color:#79af8e}
+#clear,.remove{background:#fff4f1;color:#9b4033;border-color:#ecd0c9}
+#clear:not(:disabled):hover,.remove:not(:disabled):hover{background:#ffe7e1;border-color:#d89383}
+#addCriterion,#addRemark{border-style:dashed;background:#f3f9fa;color:#07676e}
+nav button{box-shadow:none;border-bottom:3px solid #dce5ed}
+nav button.active{background:#14324d;border-color:#14324d;border-bottom-color:#59c8bd;box-shadow:0 4px 10px #14324d1a}
+nav button.active:not(:disabled):hover{background:#1c4567;border-color:#1c4567;border-bottom-color:#59c8bd}
+input[type=file]::file-selector-button{font:inherit;font-weight:650;color:#164f68;background:#edf5fa;border:1px solid #bdd3e2;border-radius:9px;padding:9px 13px;margin-right:12px;cursor:pointer}
+input[type=file]::file-selector-button:hover{background:#dfedf6}
+@media(max-width:650px){.top{gap:9px}.top .badge{width:100%}.top button{flex:1 1 calc(50% - 9px);padding:12px 9px;min-height:48px}.actions button{flex:1 1 auto;min-height:48px}.btn-icon{width:17px;height:17px;margin-right:6px}}
+@media(prefers-reduced-motion:reduce){button,.button{transition:none}button:not(:disabled):hover,button:not(:disabled):active{transform:none}}
+
+.result-summary{background:#eef8f5;border:1px solid #b8d9c5;border-radius:12px;padding:20px;margin-top:18px}
+.result-summary ul{margin:12px 0;padding-left:22px}.result-summary li{margin:7px 0}
+.preview-wrap{margin-top:24px;padding:24px;background:#e8eef3;border-radius:12px}
+.feedback-sheet{background:white;color:#182b3b;padding:32px;max-width:794px;margin:auto;border:1px solid #dce5ed;box-shadow:0 8px 24px #16304a12;overflow-wrap:anywhere}
+.sheet-brand{font:800 26px/1.3 system-ui,sans-serif;color:#126c70;border-bottom:3px solid #126c70;padding-bottom:12px;margin-bottom:14px}
+.sheet-meta{font:13px/1.6 system-ui,sans-serif;color:#526477;border-bottom:1px solid #ccd5dc;padding-bottom:12px;margin-bottom:22px;white-space:pre-wrap}
+.sheet-text{white-space:pre-wrap;font:16px/1.65 Georgia,serif}
+.preview-note{font-size:13px;color:#64768a;margin-bottom:16px}
+@media(max-width:650px){.preview-wrap{padding:12px}.feedback-sheet{padding:20px}.sheet-text{font-size:15px}}
+@media print{#printSheet.feedback-sheet{max-width:none;margin:0;border:0;box-shadow:none;padding:0}.sheet-text,#printText{font:11pt/1.6 Georgia,serif}.sheet-meta{font-size:9pt}.sheet-brand{font-size:22pt;break-after:avoid}}
+.summary-issues{background:#fff7e6;padding:14px;border-radius:8px}.approval-actions{border-top:1px solid #b8d9c5;padding-top:16px}.changed-note{color:#8b5130;font-size:13px;margin:8px 0} .summary-note{font-size:14px}
+.control-tools{justify-content:flex-end;flex-wrap:nowrap;gap:8px;margin:-10px 0 16px;padding:5px;overflow-x:auto}
+.control-tools :is(#undo,#save,#load,#clear){flex:0 0 auto;min-height:34px;padding:5px 10px;font-size:13px;font-weight:550;border-radius:8px;box-shadow:none;background:transparent;color:#526477;border-color:#d5dfe7;white-space:nowrap}
+.control-tools :is(#undo,#save,#load,#clear):not(:disabled):hover{background:#e8eef3;color:#16304a;border-color:#aabac8;box-shadow:none;transform:none}
+.control-tools .btn-icon{width:16px;height:16px;margin-right:5px}#undo .btn-icon{transform:rotate(180deg)}
+@media(max-width:650px){.control-tools{justify-content:flex-start}}
+nav{grid-template-columns:minmax(0,1fr) 16px minmax(0,1fr) 16px minmax(0,1fr) 16px minmax(0,1fr);gap:10px;align-items:center}
+nav button{display:flex;align-items:center;justify-content:center;width:100%;height:64px;min-height:64px;text-align:center;padding:8px 10px;line-height:1.3;border:2px solid #dce5ed}
+nav button.active{background:#14324d;color:white;border-color:#59c8bd;box-shadow:0 0 0 2px #59c8bd26,0 4px 10px #14324d1a}
+nav button:not(.active):not(:disabled):hover{background:#edf7f7;border-color:#8dbfbd;box-shadow:0 3px 8px #16304a0d;transform:none}
+nav button.active:not(:disabled):hover{background:#1c4567;border-color:#59c8bd;box-shadow:0 0 0 2px #59c8bd33,0 4px 10px #14324d1a;transform:none}
+.step-arrow{display:block;text-align:center;font-size:20px;font-weight:400;color:#8a9baa;user-select:none}
+@media(max-width:650px){nav{grid-template-columns:minmax(90px,1fr) 12px minmax(90px,1fr) 12px minmax(90px,1fr) 12px minmax(90px,1fr);gap:5px;overflow-x:auto;padding:5px}nav button{font-size:12px;padding:12px 6px}.step-arrow{font-size:17px}}
+.page-intro{text-align:center;padding:8px 16px 24px}.page-intro h1{font-size:28px;margin:0 0 8px}.page-intro p{margin:0 0 22px}.demo-actions{display:flex;justify-content:center}
+.demo-actions #demo{min-height:56px;padding:14px 30px;font-size:18px;background:linear-gradient(135deg,#087e83,#07676e);color:white;border-color:#07676e;box-shadow:0 5px 14px #087e8329}
+.demo-actions #demo:not(:disabled):hover{background:linear-gradient(135deg,#076b70,#064f57);border-color:#064f57;box-shadow:0 7px 18px #087e8333}
+.work-mode{margin:0 0 18px;padding:0 5px}
+@media(max-width:650px){.page-intro{padding:8px 4px 20px}.page-intro h1{font-size:24px}.demo-actions #demo{font-size:17px;padding:13px 24px}}
+.demo-actions{gap:14px;flex-wrap:wrap}
+.demo-actions #startOwn{min-height:56px;padding:14px 30px;font-size:18px;background:white;color:#087078;border-color:#8dbfbd;box-shadow:none}
+.demo-actions #startOwn:not(:disabled):hover{background:#edf7f7;border-color:#087e83}
+.demo-actions.has-demo #startOwn{background:linear-gradient(135deg,#087e83,#07676e);color:white;border-color:#07676e;box-shadow:0 5px 14px #087e8329}
+.demo-actions.has-demo #startOwn:not(:disabled):hover{background:linear-gradient(135deg,#076b70,#064f57)}
+.demo-actions.has-demo #demo{background:white;color:#526477;border-color:#cbd7e1;box-shadow:none}
+.demo-actions.has-demo #demo:not(:disabled):hover{background:#edf3f7;border-color:#aabac8}
+@media(max-width:650px){.demo-actions{gap:10px}.demo-actions #startOwn,.demo-actions #demo{width:100%;max-width:360px;font-size:17px;padding:13px 20px}}
+.work-inputs{display:grid;grid-template-columns:minmax(0,1fr) 54px minmax(0,1fr);gap:14px;align-items:start;margin-top:18px}
+.input-choice{min-width:0}.input-choice h2{font-size:17px;margin:0 0 10px}.input-choice p{font-size:13px;margin:10px 0;color:var(--muted)}
+.drop-zone{border:2px dashed #a5bfca;border-radius:12px;background:#f6fafb;padding:18px;height:280px;min-height:280px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;transition:background .15s,border-color .15s}
+.drop-zone.dragging{background:#e5f5f2;border-color:#087e83}.drop-zone label{margin:0}.drop-zone .drop-title{display:block;font-size:16px;font-weight:700;margin-bottom:5px}.drop-zone .drop-formats{display:block;font-size:13px;color:#526477;font-weight:400;margin-bottom:16px}
+.drop-zone input{margin-top:16px;max-width:100%}.drop-zone input::file-selector-button{white-space:normal}
+.choice-or{align-self:center;text-align:center;color:#64768a;font-weight:700;text-transform:lowercase}
+.input-choice #essay{height:280px;min-height:280px;margin-top:0}
+@media(max-width:700px){.work-inputs{grid-template-columns:minmax(0,1fr);gap:10px}.choice-or{padding:0}.drop-zone{height:220px;min-height:220px}.input-choice #essay{height:220px;min-height:220px}}
+</style>
+<header><div class="brand">Criteria<span>Lab</span></div><p>ИИ-помощник преподавателя для критериального оценивания письменной и устной речи</p><span style="font-size:13px;color:#a9cccF">Учебный прототип</span></header>
+<main>
+<section class="page-intro"><h1>От работы — к понятному отзыву</h1><p class="muted">Задайте условия, проверьте текст и подготовьте индивидуальную обратную связь.</p><div class="demo-actions" id="startActions"><button class="primary" id="demo">Открыть демопример</button><button id="startOwn">Проверить свою работу</button></div></section><input type="file" id="draftFile" accept=".json,application/json" hidden>
+<nav aria-label="Этапы работы"><button class="active" data-step="0">Письменная работа</button><span class="step-arrow" aria-hidden="true">→</span><button data-step="1">Критерии оценивания</button><span class="step-arrow" aria-hidden="true">→</span><button data-step="2">Оценивание</button><span class="step-arrow" aria-hidden="true">→</span><button data-step="3">Отзыв</button></nav><div class="row control-tools" role="group" aria-label="Действия с работой"><button id="save">Сохранить черновик</button><button id="load">Открыть черновик</button><button id="clear">Очистить</button><button id="undo" title="Отменить последнее изменение" disabled>Отменить</button></div>
+<div class="work-mode"><span id="mode" class="badge">Ручное оценивание · без подключения ИИ</span></div>
+<section class="page active" id="page0"><div class="panel"><div class="notice">В этой версии нет автоматической проверки ИИ, распознавания рукописи и аудио. Можно оценить работу вручную или пройти заранее подготовленный демопример. Оплата и API-ключи не нужны.</div>
+<div class="grid three"><label>Код работы<input id="code" placeholder="Например: 9A-01"></label><label>Класс<input id="schoolClass" value="9"></label><label>Уровень ученика<select id="level"><option value="">Не указан</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label></div>
+<div class="grid"><label>Тема<input id="topic" placeholder="The importance of university elections"></label><label>Тип работы<select id="genre"><option value="discussion">Discussion essay</option><option value="opinion">Opinion essay</option><option value="other">Другое</option></select></label></div>
+<label>Полная инструкция<textarea id="task" placeholder="Что требуется обсудить? Нужны ли разные точки зрения? Каковы условия задания?"></textarea></label><label>Требуемый объём (необязательно)<input id="length" placeholder="Например: 180–220 слов"></label>
+<div class="work-inputs"><div class="input-choice"><h2>Загрузить текст или фото</h2><div id="dropZone" class="drop-zone"><label for="sourceFile"><span class="drop-title">Перетащите файл сюда</span><span class="drop-formats">TXT, JPG, JPEG или PNG · до 10 МБ</span><span>или выберите файл на устройстве</span></label><input id="sourceFile" type="file" aria-label="Выбрать файл TXT, JPG, JPEG или PNG" accept=".txt,.jpg,.jpeg,.png,text/plain,image/jpeg,image/png"></div><div id="photoBox" class="hidden"><img id="previewPhoto" alt="Оригинал письменной работы"><div class="notice warning">Распознавание не подключено. Фото не превращается в текст автоматически.</div></div></div><div class="choice-or" aria-hidden="true">или</div><div class="input-choice"><h2 id="workTextTitle">Текст работы</h2><textarea id="essay" aria-labelledby="workTextTitle" rows="12" placeholder="Вставьте или напишите текст работы, сохранив ошибки оригинала."></textarea><div class="row"><span id="wordCount" class="muted">0 слов</span></div></div></div><label style="margin-top:14px"><input type="checkbox" id="textConfirmed">Я проверил(а) текст: он соответствует оригиналу</label><div class="actions"><button class="primary" id="toCriteria">К критериям →</button></div></div></section>
+<section class="page" id="page1"><div class="panel"><h1>Критерии оценивания</h1><p class="muted">Авторская учебная шкала. Названия, максимумы и дескрипторы можно менять.</p><div id="limitations" class="notice warning"></div><div id="criteriaEditor"></div><button id="addCriterion">+ Добавить критерий</button><div class="actions"><button data-go="0">← Работа</button><button class="primary" id="toReview">К оцениванию →</button></div></div></section>
+<section class="page" id="page2"><div class="panel"><div class="row"><h1>Решение преподавателя</h1><span id="total" class="score">0 / 20</span></div><div id="reviewMode" class="notice"></div><p class="muted">Комментарии пишите на языке будущего отзыва: автоматического перевода в этой версии нет.</p><div id="reviewList"></div><h2>Примеры и объяснения</h2><div id="remarks"></div><button id="addRemark">+ Добавить замечание</button><div class="grid" style="margin-top:20px"><label>Сильные стороны<textarea id="strengths" placeholder="Что получилось хорошо?"></textarea></label><label>Что улучшить<textarea id="priorities" placeholder="На чём сосредоточиться?"></textarea></label></div><label>Рекомендации к следующей работе<textarea id="next" placeholder="2–3 конкретных действия для ученика"></textarea></label><div class="notice">В демопримере исходный разбор сохраняется отдельно от ваших правок. При изменении текста или критериев связь с деморазбором снимается, требуется новая ручная оценка.</div><div class="actions"><button id="finalScore" aria-expanded="false" aria-controls="finalScoreSummary">Итоговая оценка</button></div><section id="finalScoreSummary" class="result-summary" aria-live="polite" hidden></section><div id="approvalActions" class="actions approval-actions" hidden><button id="cancelApproval">Продолжить редактирование</button><button id="confirmAssessment" class="primary">Подтверждаю итоговую оценку</button></div><div class="actions"><button data-go="1">← Критерии</button><button class="primary" id="approve">Проверить и подтвердить →</button></div></div></section>
+<section class="page" id="page3"><div class="panel"><h1>Обратная связь ученику</h1><div id="approvalStatus" class="notice warning"></div><label>Язык отзыва<select id="language"><option value="">Выберите язык</option><option value="en">English</option><option value="ru">Русский</option><option value="kk">Қазақша</option></select></label><p class="muted" style="font-size:14px">Для B1 и выше по умолчанию английский. Для A1/A2 — русский с возможностью выбрать казахский. Меняются заголовки; комментарии преподавателя не переводятся.</p><div class="actions"><button class="primary" id="generate">Собрать из утверждённых полей</button></div><label>Итоговый отзыв — можно редактировать<textarea id="feedback" placeholder="После подтверждения оценивания соберите отзыв."></textarea></label><div class="actions"><button id="copy">Скопировать</button><button id="downloadText">Скачать TXT</button><button id="preview" aria-expanded="false" aria-controls="feedbackPreview">Предпросмотр печати</button><button class="primary" id="print">Печать / сохранить PDF</button></div><section id="feedbackPreview" class="preview-wrap" hidden><h2>Предпросмотр отзыва</h2><p class="preview-note">Шаблон для A4. В PDF длинный отзыв может занять несколько страниц. Точные переносы видны в диалоге печати браузера.</p><article class="feedback-sheet"><div class="sheet-brand">CriteriaLab</div><div id="previewMeta" class="sheet-meta"></div><div id="previewText" class="sheet-text"></div></article></section></div></section>
+<div id="status" role="status" aria-live="polite"></div>
+<details class="panel"><summary>О проекте и возможностях прототипа</summary><p>CriteriaLab помогает преподавателю объяснять ошибки и готовить отзыв по прозрачным критериям. Преподаватель принимает окончательное решение.</p><p>Сейчас работают ручное оценивание, учебный деморазбор, редактирование критериев и замечаний, сборка отзыва, печать и сохранение черновика в файл. Сборка отзыва — структурированное объединение полей, а не генерация ИИ.</p><p>Следующий этап: подключение ИИ для новых письменных работ, распознавания рукописи и анализа устной речи. Произношение и беглость потребуется оценивать по аудио, а не только по расшифровке.</p><p>Приложение не отправляет работы в сеть и не сохраняет их автоматически. До закрытия вкладки скачайте черновик. В черновик входит текст и оценки, фото не включается. Для конкурса используйте демопример без персональных данных. Баллы авторской шкалы не являются официальной экзаменационной оценкой.</p></details>
+</main><footer>CriteriaLab · Учебный проект · Окончательная оценка и обратная связь утверждаются преподавателем.</footer>
+<article id="printSheet" class="print-only feedback-sheet"><div class="sheet-brand">CriteriaLab</div><div id="printMeta" class="sheet-meta"></div><div id="printText" class="sheet-text"></div></article>
+<script>
+'use strict';
+const criterionNames={en:['Task fulfilment','Development of arguments','Organisation and coherence','Vocabulary and style','Grammar, spelling and punctuation'],kk:['Тапсырманың орындалуы','Дәлелдердің дамуы','Мәтіннің құрылымы мен байланысы','Сөздік қор және стиль','Грамматика, емле және тыныс белгілері']};
+function criterionTitle(name){const i=definitions.findIndex(d=>d[0]===name);return i>=0&&criterionNames[document.getElementById('language').value]?criterionNames[document.getElementById('language').value][i]:name;}
+const $=id=>document.getElementById(id);
+const definitions=[
+['Выполнение задания',['Нет материала для оценки.','Тема затронута минимально; основные требования не выполнены.','Тема раскрыта частично; часть требований пропущена.','Основные требования выполнены, есть отдельные упущения.','Тема раскрыта полностью; все явно заданные требования выполнены.']],
+['Развитие аргументов',['Нет аргументов для оценки.','Утверждения почти не объясняются.','Есть аргументы, но объяснения или примеры ограничены.','Аргументы объяснены и подкреплены подходящими примерами; отдельные идеи требуют развития.','Аргументы убедительно развиты, примеры объяснены и связаны с позицией.']],
+['Организация и связность',['Нет связного текста.','Последовательность идей трудно проследить.','Структура заметна, но переходы и абзацы не всегда логичны.','Понятная структура и в основном последовательное развитие; отдельные неровности.','Чёткие абзацы, логичное развитие и точные средства связи.']],
+['Лексика и стиль',['Нет языкового материала для оценки.','Словарный запас сильно ограничивает выражение мысли.','Смысла можно понять, но повторы и неточности заметны.','Словарь в основном точен и достаточен для выбранного уровня; отдельные неточности.','Точный и разнообразный для выбранного уровня словарь, подходящий стиль.']],
+['Грамматика, орфография и пунктуация',['Нет языкового материала для оценки.','Частые ошибки существенно мешают пониманию.','Ошибки заметны, некоторые затрудняют понимание; диапазон ограничен.','Используются разные конструкции; локальные ошибки обычно не мешают пониманию.','Уверенное владение конструкциями выбранного уровня; редкие мелкие неточности.']]];
+let criteria=[],remarks=[],approved=false,demoMode=false,dirty=false,photoURL=null,feedbackFresh=false;
+let lastSnapshot=null,undoSnapshot=null,editKey=null,pendingApproval=false,currentStep=0,undoLocation=null;
+let demoBaseline=null,lastBuiltFeedback='';
+function demoDataSignature(){const data=snapshot();delete data.feedback;return JSON.stringify(data);}
+function startOwnWork(){
+  const untouchedDemo=demoMode&&demoBaseline===demoDataSignature()&&(!$('feedback').value||$('feedback').value===lastBuiltFeedback);
+  if(dirty&&!untouchedDemo&&!confirm('Начать свою работу? Несохранённые изменения будут удалены. Если они нужны, нажмите «Отмена» и сохраните черновик.'))return;
+  reset();
+  $('sourceFile').focus({preventScroll:true});
+  $('sourceFile').scrollIntoView({behavior:'smooth',block:'center'});
+  say('Загрузите TXT или вставьте текст своей работы. Фото доступно только для просмотра.');
+}
+$('startOwn').onclick=startOwnWork;
+function copyState(value){return JSON.parse(JSON.stringify(value));}
+function rememberChange(key=null,previousState=lastSnapshot){
+  if(!lastSnapshot)return;
+  if(key===null||key!==editKey){undoSnapshot=copyState(previousState);undoLocation={step:currentStep,key};}
+  editKey=key;
+}
+function clearUndo(){undoSnapshot=null;undoLocation=null;editKey=null;}
+function hasAssessment(){return approved||criteria.some(c=>c.score!==''||c.comment.trim())||remarks.length>0||['strengths','priorities','next'].some(id=>$(id).value.trim());}
+function allowSourceChange(){return !hasAssessment()||confirm('Изменение текста, задания или критериев сбросит баллы, комментарии, замечания и общие рекомендации. Итоговый отзыв станет неактуальным. Продолжить? После изменения можно нажать «Отменить последнее изменение».');}
+function restoreSnapshot(state){
+  fields.forEach(id=>$(id).value=state.fields[id]);
+  criteria=copyState(state.criteria);remarks=copyState(state.remarks);
+  $('textConfirmed').checked=state.textConfirmed;$('language').value=state.language;$('feedback').value=state.feedback;
+  demoMode=state.demoMode;approved=false;feedbackFresh=false;pendingApproval=false;dirty=true;
+  renderCriteria();renderReview();update();
+}
+$('undo').onclick=()=>{
+  if(!undoSnapshot)return;
+  const previous=undoSnapshot,location=undoLocation;
+  clearUndo();restoreSnapshot(previous);go(location.step);
+  const key=location.key||'',parts=key.split(':');
+  const selector=key==='feedback'?'#feedback':parts[0]==='field'?'#'+parts[1]:parts[0]==='score'?'[data-score="'+parts[1]+'"]':parts[0]==='comment'?'[data-comment="'+parts[1]+'"]':parts[0]==='remark'?'[data-r="'+parts[1]+'"][data-rp="'+parts[2]+'"]':parts[0]==='criterion'?'[data-c="'+parts[1]+'"]'+(parts[2]==='desc'?'[data-desc="'+parts[3]+'"]':'[data-prop="'+parts[2]+'"]'):null;
+  const target=(selector&&document.querySelector?.(selector))||$('page'+location.step);
+  target.scrollIntoView({behavior:'smooth',block:'center'});
+  say('Изменение отменено. Данные восстановлены; подтвердите оценивание заново.');
+};
+// One undo covers a field-editing session, rather than the last typed character.
+['criteriaEditor','reviewList','remarks',...['code','schoolClass','level','topic','genre','task','length','essay','strengths','priorities','next','feedback','language','textConfirmed']].forEach(id=>$(id).addEventListener('focusout',()=>{editKey=null;}));
+const fields=['code','schoolClass','level','topic','genre','task','length','essay','strengths','priorities','next'];
+function defaults(){return definitions.map(([name,desc])=>({name,max:4,desc:[...desc],score:'',comment:'',original:null}));}
+function say(s){$('status').textContent=s;}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function totals(){return [criteria.reduce((s,c)=>s+(Number.isInteger(Number(c.score))&&Number(c.score)>=0&&Number(c.score)<=c.max?Number(c.score):0),0),criteria.reduce((s,c)=>s+Number(c.max),0)];}
+function invalidate(){pendingApproval=false;approved=false;feedbackFresh=false;dirty=true;$('printText').textContent='';$('printMeta').textContent='';update();}
+function sourceChanged(){if(demoMode||criteria.some(c=>c.original)){demoMode=false;criteria.forEach(c=>{c.score='';c.comment='';c.original=null;});remarks=[];['strengths','priorities','next'].forEach(id=>$(id).value='');renderReview();}else{criteria.forEach(c=>{c.score='';c.comment='';});remarks=[];['strengths','priorities','next'].forEach(id=>$(id).value='');renderReview();}invalidate();}
+function go(n){currentStep=n;editKey=null;pendingApproval=false;document.querySelectorAll('.page').forEach((p,i)=>p.classList.toggle('active',i===n));document.querySelectorAll('nav button').forEach((b,i)=>{b.classList.toggle('active',i===n);b.setAttribute('aria-current',i===n?'step':'false');});update();window.scrollTo({top:0,behavior:'smooth'});}
+function update(){$('startActions').classList.toggle('has-demo',demoMode);lastSnapshot=copyState(snapshot());$('undo').disabled=!undoSnapshot;$('approvalActions').hidden=!pendingApproval;syncPrint();renderTeacherChanges();if(!$('finalScoreSummary').hidden)renderFinalScore();let [a,b]=totals();$('total').textContent=a+' / '+b;$('wordCount').textContent=($('essay').value.trim().match(/\S+/g)||[]).length+' слов';$('mode').textContent=demoMode?'Демопример · заранее подготовленный разбор':'Ручное оценивание · без подключения ИИ';$('reviewMode').textContent=demoMode?'Здесь показан заранее подготовленный учебный разбор, а не результат новой проверки ИИ. Проверьте и измените его.':'Автоматическая проверка не подключена. Заполните баллы, комментарии и замечания самостоятельно.';$('approvalStatus').textContent=approved?'Оценивание подтверждено преподавателем. Можно собрать отзыв.':'Оценивание не подтверждено или данные изменились. Вернитесь в раздел «Оценивание» и подтвердите актуальную оценку.';$('approvalStatus').classList.toggle('warning',!approved);$('generate').disabled=!approved;['copy','print','downloadText','preview'].forEach(id=>$(id).disabled=!approved||!feedbackFresh||!$('feedback').value.trim());$('feedback').disabled=!approved;$('limitations').textContent=[!$('level').value?'Уровень не указан: требования к языку нужно уточнить.':'Уровень: '+$('level').value+'.',!$('task').value.trim()?'Нет полной инструкции: не штрафуйте за требования, которые не были явно заданы.':'Сверяйте оценку с полной инструкцией.', 'Discussion essay: проверяйте требование разных точек зрения по заданию, а не только по названию жанра.'].join(' ');}
+function criterionChanged(c){return !!c.original&&(c.score===''||Number(c.score)!==c.original.score||c.comment!==c.original.comment);}
+function renderFinalScore(){
+  const incomplete=!criteria.length||criteria.some(c=>c.score===''||!Number.isInteger(Number(c.score))||Number(c.score)<0||Number(c.score)>c.max);
+  const [score,max]=totals(),issues=validationIssues();
+  const changed=criteria.filter(criterionChanged).length;
+  $('finalScoreSummary').innerHTML='<h2>Итоговая оценка</h2><div class="score">'+(incomplete?'Не завершена':score+' / '+max)+'</div><ul>'+criteria.map(c=>'<li>'+esc(c.name)+': <b>'+esc(c.score===''?'не заполнено':c.score)+' / '+esc(c.max)+'</b></li>').join('')+'</ul><p>Замечаний в отзыве: <b>'+remarks.filter(r=>r.include).length+'</b>; исключено: '+remarks.filter(r=>!r.include).length+'.</p>'+(demoMode?'<p>Критериев с правками преподавателя относительно деморазбора: '+changed+'.</p>':'')+(issues.length?'<div class="summary-issues"><b>Перед подтверждением исправьте:</b><ul>'+issues.map(issue=>'<li>'+esc(issue)+'</li>').join('')+'</ul></div>':'<p>Обязательные поля заполнены. Проверьте баллы, комментарии и примеры перед подтверждением.</p>')+'<p class="summary-note">'+(approved?'Оценивание подтверждено преподавателем.':'Окончательное решение принимает преподаватель. Подтверждение не отправляет отзыв ученику.')+'</p>';
+}
+function syncPrint(){
+  const ready=approved&&feedbackFresh&&$('feedback').value.trim();
+  const labels={en:['Work','Class','Level','Date'],ru:['Работа','Класс','Уровень','Дата'],kk:['Жұмыс','Сынып','Деңгей','Күні']}[$('language').value]||['Работа','Класс','Уровень','Дата'];
+  const locale={en:'en-GB',ru:'ru-RU',kk:'kk-KZ'}[$('language').value]||'ru-RU';
+  const meta=ready?[['code',0],['schoolClass',1],['level',2]].filter(([id])=>$(id).value.trim()).map(([id,i])=>labels[i]+': '+$(id).value).concat(labels[3]+': '+new Date().toLocaleDateString(locale)).join(' · '):'';
+  ['printMeta','previewMeta'].forEach(id=>$(id).textContent=meta);
+  ['printText','previewText'].forEach(id=>$(id).textContent=ready?$('feedback').value:'');
+  if(!ready){$('feedbackPreview').hidden=true;$('preview').setAttribute('aria-expanded','false');}
+}
+$('finalScore').onclick=()=>{pendingApproval=false;$('approvalActions').hidden=true;const panel=$('finalScoreSummary');panel.hidden=!panel.hidden;$('finalScore').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)renderFinalScore();};
+$('preview').onclick=()=>{if(!approved||!feedbackFresh||!$('feedback').value.trim())return;syncPrint();const panel=$('feedbackPreview');panel.hidden=!panel.hidden;$('preview').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)panel.scrollIntoView({behavior:'smooth',block:'start'});};
+window.addEventListener('beforeprint',syncPrint);
+function renderCriteria(){$('criteriaEditor').innerHTML=criteria.map((c,i)=>`<div class="criterion"><div class="grid"><label>Название критерия<input data-c="${i}" data-prop="name" value="${esc(c.name)}"></label><label>Максимальный балл<input type="number" min="1" max="20" step="1" data-c="${i}" data-prop="max" value="${c.max}"></label></div><details><summary>Дескрипторы баллов</summary>${Array.from({length:c.max+1},(_,j)=>`<label>${j} балл(а)<textarea data-c="${i}" data-desc="${j}">${esc(c.desc[j]||'Опишите требования к этому баллу.')}</textarea></label>`).join('')}</details><button class="remove" data-remove-c="${i}">Удалить критерий</button></div>`).join('');}
+function renderReview(){$('reviewList').innerHTML=criteria.map((c,i)=>`<div class="criterion"><h3>${esc(c.name)}</h3><div class="subtle">${c.original?'<b>Исходный деморазбор: '+c.original.score+' / '+c.max+'</b><br>'+esc(c.original.comment):'Предложения ИИ отсутствуют. Ручное оценивание.'}</div><div class="grid"><label>Итоговый балл учителя (0–${c.max})<input data-score="${i}" type="number" min="0" max="${c.max}" step="1" value="${c.score}"></label><label>Комментарий для ученика<textarea data-comment="${i}">${esc(c.comment)}</textarea></label></div><p class="changed-note" id="teacherChange${i}"></p></div>`).join('');renderRemarks();update();}
+function renderTeacherChanges(){
+  criteria.forEach((c,i)=>{const el=$('teacherChange'+i);if(el)el.textContent=criterionChanged(c)?'Изменено преподавателем относительно исходного деморазбора':'';});
+}
+function renderRemarks(){$('remarks').innerHTML=remarks.map((r,i)=>`<div class="remark"><div class="grid"><label>Точная цитата<input data-r="${i}" data-rp="quote" value="${esc(r.quote)}"></label><label>Исправление<input data-r="${i}" data-rp="correction" value="${esc(r.correction)}"></label></div><label>Объяснение<textarea data-r="${i}" data-rp="explanation">${esc(r.explanation)}</textarea></label><label>Тип<select data-r="${i}" data-rp="type">${[['error','Ошибка'],['style','Стилистическая рекомендация'],['uncertain','Сомнение распознавания']].map(([v,t])=>`<option value="${v}" ${r.type===v?'selected':''}>${t}</option>`).join('')}</select></label><label><input type="checkbox" data-include="${i}" ${r.include?'checked':''}>Включить в отзыв</label><button class="remove" data-remove-r="${i}">Удалить замечание</button></div>`).join('');}
+function validationIssues(){
+  const issues=[];
+  if(!$('essay').value.trim())issues.push('Введите текст работы.');
+  if(!$('textConfirmed').checked)issues.push('Подтвердите проверку текста в разделе «Письменная работа».');
+  if(!criteria.length)issues.push('Добавьте хотя бы один критерий.');
+  criteria.forEach((c,i)=>{
+    const label=c.name.trim()||'Критерий '+(i+1);
+    if(!c.name.trim())issues.push('Укажите название критерия '+(i+1)+'.');
+    if(!Number.isInteger(Number(c.max))||c.max<1||c.max>20)issues.push(label+': максимум должен быть целым числом от 1 до 20.');
+    if(c.score===''||!Number.isInteger(Number(c.score))||Number(c.score)<0||Number(c.score)>c.max)issues.push(label+': укажите целый балл от 0 до '+c.max+'.');
+    if(!c.comment.trim())issues.push(label+': добавьте комментарий.');
+  });
+  remarks.forEach((r,i)=>{if(!r.include)return;const label='Замечание '+(i+1)+': ';
+    if(!r.quote.trim()||!$('essay').value.includes(r.quote))issues.push(label+'точная цитата не найдена в тексте.');
+    if(r.type==='uncertain')issues.push(label+'уточните сомнение распознавания или исключите замечание из отзыва.');
+    if(!r.correction.trim()||!r.explanation.trim())issues.push(label+'добавьте исправление и объяснение.');
+  });
+  [['strengths','сильные стороны'],['priorities','зоны роста'],['next','рекомендации']].forEach(([id,label])=>{if(!$(id).value.trim())issues.push('Заполните '+label+'.');});
+  return issues;
+}
+function validate(){return validationIssues()[0]||'';}
+const translations={en:{title:'Feedback on your essay',score:'Score',criteria:'Assessment criteria',strong:'What you did well',improve:'What to improve',examples:'Examples and explanations',original:'Original',correction:'Suggested version',reason:'Explanation',next:'For your next essay',style:'Style suggestion',error:'Error',level:'Level not specified: the assessment is provisional.',task:'Full task instructions were not provided: task fulfilment is provisional.'},ru:{title:'Обратная связь по эссе',score:'Оценка',criteria:'Критерии оценивания',strong:'Что получилось хорошо',improve:'Что улучшить',examples:'Примеры и объяснения',original:'Исходный фрагмент',correction:'Предлагаемый вариант',reason:'Объяснение',next:'Для следующего эссе',style:'Стилистическая рекомендация',error:'Ошибка',level:'Уровень не указан: оценка предварительная.',task:'Полная инструкция не предоставлена: выполнение задания оценено предварительно.'},kk:{title:'Эссе бойынша кері байланыс',score:'Баға',criteria:'Бағалау критерийлері',strong:'Жақсы орындалған тұстар',improve:'Жақсартуды қажет ететін тұстар',examples:'Мысалдар мен түсіндірмелер',original:'Бастапқы үзінді',correction:'Ұсынылған нұсқа',reason:'Түсіндірме',next:'Келесі эссеге ұсыныстар',style:'Стильдік ұсыныс',error:'Қате',level:'Тіл деңгейі көрсетілмеген: бағалау алдын ала жасалды.',task:'Тапсырманың толық нұсқаулығы берілмеген: тапсырманың орындалуы алдын ала бағаланды.'}};
+function inlineFeedback(value){return String(value).trim().replace(/\s+/g,' ');}
+function feedbackSentence(value){const text=inlineFeedback(value);return !text||/[.!?…:;]["”’']?$/.test(text)?text:text+'.';}
+function buildFeedback(){
+  if(!approved)return;
+  const error=validate();if(error){say(error);return;}
+  const t=translations[$('language').value];if(!t){say('Выберите язык отзыва.');return;}
+  const [score,max]=totals();
+  const heading=[t.title,$('topic').value.trim(),t.score+': '+score+' / '+max,t.criteria+': '+criteria.map(c=>criterionTitle(c.name)+' '+c.score+'/'+c.max).join(' · ')].filter(Boolean).join('\n');
+  // Keep every approved teacher comment. No model paraphrasing or new claims.
+  const assessment=[$('strengths').value,...criteria.map(c=>c.comment)].map(feedbackSentence).filter(Boolean).join(' ');
+  const examples=remarks.filter(r=>r.include).map(r=>'- '+(r.type==='style'?t.style:t.error)+': “'+r.quote+'” → “'+r.correction+'”. '+feedbackSentence(r.explanation));
+  const improvements=[t.improve+': '+inlineFeedback($('priorities').value),...examples].join('\n');
+  const next=t.next+': '+inlineFeedback($('next').value);
+  const warnings=[!$('level').value?t.level:'',!$('task').value.trim()?t.task:''].filter(Boolean).join(' ');
+  $('feedback').value=[heading,assessment,improvements,next,warnings].filter(Boolean).join('\n\n');
+  lastBuiltFeedback=$('feedback').value;feedbackFresh=true;dirty=true;update();say('Компактный отзыв собран из утверждённых полей. Проверьте его перед печатью.');
+}
+
+function download(name,data,type){let u=URL.createObjectURL(new Blob([data],{type}));let a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);}
+function snapshot(){return{format:'CriteriaLab',version:1,fields:Object.fromEntries(fields.map(id=>[id,$(id).value])),textConfirmed:$('textConfirmed').checked,criteria,remarks,language:$('language').value,feedback:$('feedback').value,demoMode};}
+function reset(){demoBaseline=null;lastBuiltFeedback='';clearUndo();pendingApproval=false;$('finalScoreSummary').hidden=true;$('finalScore').setAttribute('aria-expanded','false');fields.forEach(id=>$(id).value='');$('schoolClass').value='9';$('genre').value='discussion';$('textConfirmed').checked=false;$('feedback').value='';$('language').value='';$('sourceFile').value='';if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;$('photoBox').classList.add('hidden');criteria=defaults();remarks=[];demoMode=false;approved=false;feedbackFresh=false;dirty=false;renderCriteria();renderReview();go(0);}
+function loadDemo(){if(dirty&&!confirm('Заменить текущую работу демопримером? Сначала сохраните нужный черновик.'))return;reset();demoMode=true;$('code').value='DEMO-01';$('level').value='B1';$('topic').value='The importance of university elections';$('genre').value='opinion';$('task').value='Write an opinion essay explaining why university elections are important. Give two reasons and support them with examples. This is a synthetic demonstration task.';$('length').value='180–220 words';$('essay').value=`In my opinion, university elections are important because they give students a voice in campus life. I believe that choosing representatives can make the university a better place for everyone.
+
+First, elections helps students choose leaders who understand their concerns. For example, students may want longer library opening hours during exams. An elected representative can discuss this idea with the university and explain why it matters. This gives students a clear way to suggest changes instead of only complaining to their friends.
+
+Second, elections encourage students to take part in their community. During a campaign, a candidates explain their plans, and students compare them before they vote. Students can learn how to ask questions and make thoughtful decisions. However, some students does not vote because they think nothing will change. Candidates should explain what they can realistically achieve and report on their progress after the election.
+
+In conclusion, university elections help students choose effective leaders and become more involved in campus life. They also provide useful experience of making decisions together. To make elections successful, the university should give all candidates a fair opportunity to present their ideas. Students should have access to clear information before choosing a representative.`;$('textConfirmed').checked=true;const comments=['The essay addresses the opinion task and explains why elections matter.','Two reasons are supported with relevant examples, including library opening hours. Explain the likely outcome of each proposal more fully.','The introduction, main paragraphs and conclusion create a clear sequence.','Topic vocabulary is appropriate: “an elected representative” and “a fair opportunity”. More precise wording could strengthen some ideas.','Meaning is clear, but check subject–verb agreement and articles before plural nouns.'];criteria.forEach((c,i)=>{c.score=3;c.comment=comments[i];c.original={score:3,comment:comments[i]};});remarks=[{quote:'elections helps students',correction:'elections help students',explanation:'The plural subject “elections” takes “help”, without -s.',type:'error',include:true},{quote:'a candidates explain their plans',correction:'candidates explain their plans',explanation:'Do not use the singular article “a” before the plural noun “candidates”.',type:'error',include:true},{quote:'some students does not vote',correction:'some students do not vote',explanation:'Use “do”, not “does”, with the plural subject “students”.',type:'error',include:true}];$('strengths').value='You present a clear opinion and support it with two relevant reasons. The example about library opening hours makes your argument concrete.';$('priorities').value='Check subject–verb agreement and articles. Develop the consequences of your examples in more detail.';$('next').value='1. Explain how each example supports your main point.\n2. Check every plural subject and its verb.\n3. Read your draft once more for articles before submitting it.';$('language').value='en';approved=false;feedbackFresh=false;dirty=true;renderCriteria();renderReview();go(0);demoBaseline=demoDataSignature();say('Открыт синтетический демопример. Уровень B1 задан для демонстрации, не определён по классу.');}
+document.querySelectorAll('[data-step]').forEach(b=>b.onclick=()=>go(Number(b.dataset.step)));document.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(Number(b.dataset.go)));
+fields.forEach(id=>$(id).addEventListener('input',()=>{
+  const previous=lastSnapshot.fields[id];if($(id).value===previous)return;
+  if(['strengths','priorities','next','code','schoolClass'].includes(id)){rememberChange('field:'+id);invalidate();return;}
+  if(!allowSourceChange()){$(id).value=previous;say('Изменение отменено. Оценивание сохранено.');return;}
+  rememberChange('field:'+id);
+  if(id==='essay')$('textConfirmed').checked=false;
+  sourceChanged();
+  if(id==='level')$('language').value=['B1','B2','C1','C2'].includes($('level').value)?'en':(['A1','A2'].includes($('level').value)?'ru':'');
+  update();
+}));
+$('textConfirmed').onchange=()=>{rememberChange();invalidate();};
+$('language').onchange=()=>{rememberChange();pendingApproval=false;feedbackFresh=false;dirty=true;update();say('Язык заголовков изменён. Комментарии не переводятся: проверьте их и соберите отзыв заново.');};
+$('feedback').oninput=()=>{rememberChange('feedback');dirty=true;feedbackFresh=true;update();};
+
+$('toCriteria').onclick=()=>{if(!$('essay').value.trim()||!$('textConfirmed').checked){say('Введите текст и подтвердите его соответствие оригиналу.');return;}go(1);};$('toReview').onclick=()=>go(2);
+$('criteriaEditor').addEventListener('input',e=>{
+  const el=e.target;if(el.dataset.c===undefined)return;
+  const c=criteria[Number(el.dataset.c)],prop=el.dataset.desc!==undefined?'desc':el.dataset.prop;
+  const previous=prop==='desc'?(c.desc[Number(el.dataset.desc)]||''):c[prop];
+  if(String(previous)===el.value)return;
+  if(prop==='max'){
+    const v=Number(el.value);
+    if(!Number.isInteger(v)||v<1||v>20){el.setCustomValidity('Целое число от 1 до 20');el.reportValidity();el.value=String(c.max);el.setCustomValidity('');return;}
+    el.setCustomValidity('');
+  }
+  if(!allowSourceChange()){el.value=String(previous);say('Изменение критерия отменено. Оценивание сохранено.');return;}
+  rememberChange('criterion:'+el.dataset.c+':'+prop+':'+(el.dataset.desc||''));
+  if(prop==='desc')c.desc[Number(el.dataset.desc)]=el.value;else c[prop]=prop==='max'?Number(el.value):el.value;
+  sourceChanged();
+});
+$('criteriaEditor').addEventListener('change',e=>{if(e.target.dataset.prop==='max')renderCriteria();});
+$('criteriaEditor').addEventListener('click',e=>{if(e.target.dataset.removeC!==undefined){if(!allowSourceChange())return;rememberChange();criteria.splice(Number(e.target.dataset.removeC),1);sourceChanged();renderCriteria();}});
+$('addCriterion').onclick=()=>{if(!allowSourceChange())return;rememberChange();criteria.push({name:'Новый критерий',max:4,desc:['Нет материала.','','','',''],score:'',comment:'',original:null});sourceChanged();renderCriteria();};
+$('reviewList').addEventListener('input',e=>{
+  const el=e.target;
+  if(el.dataset.score!==undefined){if(String(criteria[Number(el.dataset.score)].score)===el.value)return;rememberChange('score:'+el.dataset.score,snapshot());criteria[Number(el.dataset.score)].score=el.value;invalidate();}
+  if(el.dataset.comment!==undefined){rememberChange('comment:'+el.dataset.comment);criteria[Number(el.dataset.comment)].comment=el.value;invalidate();}
+});
+$('remarks').addEventListener('input',e=>{
+  const el=e.target;
+  if(el.dataset.r!==undefined){rememberChange('remark:'+el.dataset.r+':'+el.dataset.rp);remarks[Number(el.dataset.r)][el.dataset.rp]=el.value;invalidate();}
+  if(el.dataset.include!==undefined){rememberChange();remarks[Number(el.dataset.include)].include=el.checked;invalidate();}
+});
+$('remarks').addEventListener('click',e=>{if(e.target.dataset.removeR!==undefined){rememberChange();remarks.splice(Number(e.target.dataset.removeR),1);invalidate();renderRemarks();}});
+$('addRemark').onclick=()=>{rememberChange();remarks.push({quote:'',correction:'',explanation:'',type:'error',include:true});invalidate();renderRemarks();};
+$('approve').onclick=()=>{
+  editKey=null;$('finalScoreSummary').hidden=false;$('finalScore').setAttribute('aria-expanded','true');
+  pendingApproval=true;update();$('confirmAssessment').disabled=!!validate();
+  $('finalScoreSummary').scrollIntoView({behavior:'smooth',block:'start'});
+  say(validate()?'Перед подтверждением исправьте пункты в сводке.':'Проверьте сводку и нажмите «Подтверждаю итоговую оценку».');
+};
+$('cancelApproval').onclick=()=>{pendingApproval=false;update();say('Можно продолжить редактирование.');};
+$('confirmAssessment').onclick=()=>{
+  if(!pendingApproval)return;const err=validate();if(err){update();say(err);return;}
+  pendingApproval=false;approved=true;feedbackFresh=false;go(3);say('Оценивание подтверждено. Теперь соберите отзыв.');
+};
+$('generate').onclick=()=>{if(!approved)return;const err=validate();if(err){say(err);return;}buildFeedback();};
+$('demo').onclick=loadDemo;$('clear').onclick=()=>{if(!dirty||confirm('Очистить работу? Несохранённый текст и оценки будут потеряны.')){reset();say('Работа очищена.');}};
+
+$('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('feedback').value);say('Отзыв скопирован.');}catch{$('feedback').focus();$('feedback').select();say('Выделен весь отзыв. Нажмите Ctrl+C для копирования.');}};$('downloadText').onclick=()=>download('CriteriaLab-feedback.txt',$('feedback').value,'text/plain;charset=utf-8');$('print').onclick=()=>{if(!approved||!feedbackFresh)return;syncPrint();window.print();};
+$('save').onclick=()=>{download('CriteriaLab-draft.json',JSON.stringify(snapshot(),null,2),'application/json');dirty=false;say('Черновик скачан. Он содержит текст и оценки, но не фото.');};$('load').onclick=()=>$('draftFile').click();
+$('draftFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{if(f.size>2e6)throw Error('Размер черновика больше 2 МБ.');let d=JSON.parse(await f.text());if(d.format!=='CriteriaLab'||d.version!==1||!d.fields||!Array.isArray(d.criteria)||d.criteria.length<1||d.criteria.length>30||!Array.isArray(d.remarks)||d.remarks.length>100)throw Error('Неверный формат черновика.');for(let c of d.criteria)if(typeof c.name!=='string'||!Number.isInteger(c.max)||c.max<1||c.max>20||!Array.isArray(c.desc)||c.desc.some(x=>typeof x!=='string')||typeof c.comment!=='string'||!(c.score===''||(Number.isInteger(Number(c.score))&&Number(c.score)>=0&&Number(c.score)<=c.max))||(c.original&&(!Number.isFinite(c.original.score)||typeof c.original.comment!=='string')))throw Error('Некорректные критерии.');for(let r of d.remarks)if(!['quote','correction','explanation'].every(k=>typeof r[k]==='string')||!['error','style','uncertain'].includes(r.type)||typeof r.include!=='boolean')throw Error('Некорректные замечания.');if(dirty&&!confirm('Заменить текущую работу сохранённым черновиком?'))return;reset();fields.forEach(id=>$(id).value=typeof d.fields[id]==='string'?d.fields[id]:'');criteria=d.criteria;remarks=d.remarks;$('textConfirmed').checked=!!d.textConfirmed;$('language').value=['en','ru','kk'].includes(d.language)?d.language:'';$('feedback').value=typeof d.feedback==='string'?d.feedback:'';demoMode=!!d.demoMode;approved=false;feedbackFresh=false;dirty=false;renderCriteria();renderReview();go(0);say('Черновик открыт. Проверьте данные и повторно подтвердите оценивание; старый отзыв пока недоступен для печати.');}catch(err){say('Не удалось открыть черновик: '+err.message);}finally{e.target.value='';}};
+async function handleSourceFile(file){
+  if(!file)return;
+  if(file.size>10*1024*1024){say('Файл больше 10 МБ. Выберите меньший файл.');return;}
+  if(/\.txt$/i.test(file.name)){
+    try{
+      const text=await file.text();
+      if(!allowSourceChange()){say('Загрузка отменена. Текущая работа сохранена.');return;}
+      rememberChange();$('essay').value=text;$('textConfirmed').checked=false;sourceChanged();
+      say('Текст загружен. Сверьте его с оригиналом и подтвердите проверку.');
+    }catch{say('Не удалось прочитать текстовый файл.');}
+  }else if(/\.(jpe?g|png)$/i.test(file.name)){
+    if(($('essay').value.trim()||hasAssessment())&&!confirm('Новое фото заменит исходную работу: текущий текст и оценивание будут очищены. Продолжить?')){say('Загрузка фото отменена. Текущая работа сохранена.');return;}
+    clearUndo();if(photoURL)URL.revokeObjectURL(photoURL);
+    $('essay').value='';
+    photoURL=URL.createObjectURL(file);$('previewPhoto').src=photoURL;$('photoBox').classList.remove('hidden');
+    $('textConfirmed').checked=false;sourceChanged();
+    say('Фото открыто для просмотра. Введите его текст в поле справа и сверьте с оригиналом.');
+  }else say('Поддерживаются TXT, JPG, JPEG и PNG.');
+}
+$('sourceFile').onchange=async e=>{await handleSourceFile(e.target.files[0]);e.target.value='';};
+const dropZone=$('dropZone');
+['dragenter','dragover'].forEach(type=>dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.add('dragging');}));
+['dragleave','dragend'].forEach(type=>dropZone.addEventListener(type,e=>{e.preventDefault();dropZone.classList.remove('dragging');}));
+dropZone.addEventListener('drop',async e=>{
+  e.preventDefault();dropZone.classList.remove('dragging');
+  if(e.dataTransfer.files.length!==1){say('Перетащите один файл TXT, JPG, JPEG или PNG.');return;}
+  await handleSourceFile(e.dataTransfer.files[0]);
+});
+const iconPaths={play:'<path d="m9 5 11 7-11 7Z"/>',download:'<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',folder:'<path d="M3 7V4h6l2 3h10v13H3Z"/><path d="M3 10h18"/>',trash:'<path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/>',check:'<path d="m5 12 4 4L19 6"/><circle cx="12" cy="12" r="10"/>',copy:'<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',print:'<path d="M6 8V3h12v5M6 17H3V9h18v8h-3"/><path d="M6 14h12v7H6Z"/><path d="M17 11h1"/>',plus:'<path d="M12 4v16M4 12h16"/>',arrow:'<path d="M4 12h16m-6-6 6 6-6 6"/>',spark:'<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/>'};
+const buttonIcons={startOwn:'plus',undo:'arrow',confirmAssessment:'check',finalScore:'check',preview:'print',demo:'play',save:'download',load:'folder',clear:'trash',approve:'check',copy:'copy',downloadText:'download',print:'print',addCriterion:'plus',addRemark:'plus',toCriteria:'arrow',toReview:'arrow',generate:'spark'};
+Object.entries(buttonIcons).forEach(([id,key])=>{const button=$(id);const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('fill','none');svg.setAttribute('stroke','currentColor');svg.setAttribute('stroke-width','1.8');svg.setAttribute('stroke-linecap','round');svg.setAttribute('stroke-linejoin','round');svg.setAttribute('class','btn-icon');svg.setAttribute('aria-hidden','true');svg.innerHTML=iconPaths[key];button.prepend(svg);});
+$('save').title='Скачать текст и оценки на это устройство для продолжения работы';$('load').title='Открыть ранее скачанный черновик CriteriaLab';$('print').title='Открыть печать; в диалоге можно выбрать сохранение в PDF';$('clear').title='Очистить текущую работу после подтверждения';
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue='';}});reset();
+</script>
+</html>
