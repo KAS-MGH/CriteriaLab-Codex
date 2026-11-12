@@ -7,10 +7,14 @@ for(const [,id] of html.matchAll(/\bid="([^"]+)"/g)) elements.set(id,{
   events:{},addEventListener(name,handler){this.events[name]=handler},setAttribute(k,v){this.attributes[k]=v},prepend(){},scrollIntoView(){},focus(){this.focused=true;}
 });
 const listeners={};
+const zipModule=require('./vendor/jszip.min.js');
 const context=vm.createContext({console,Date,URL,Blob,setTimeout,confirm:()=>true,
+  JSZip:zipModule,
+  DOMParser:class{parseFromString(xml){return{querySelector(){return null},getElementsByTagNameNS(uri,tag){if(tag!=='p')return[];return [...xml.matchAll(/<w:p>([\s\S]*?)<\/w:p>/g)].map(match=>({getElementsByTagNameNS(u,t){return [...match[1].matchAll(/<w:t>([\s\S]*?)<\/w:t>/g)].map(m=>({textContent:m[1]}))}}))}}}},
   document:{getElementById:id=>{if(/^teacherChange\d+$/.test(id))return null;assert(elements.has(id),'Unknown ID '+id);return elements.get(id)},querySelectorAll:()=>[],createElementNS:()=>({setAttribute(){}})},
   window:{scrollTo(){},print(){},addEventListener:(name,handler)=>listeners[name]=handler}
 });
+vm.runInContext(fs.readFileSync('criteria-import.js','utf8'),context);
 vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
 function run(code){return vm.runInContext(code,context)}
 function approve(){elements.get('approve').onclick();elements.get('confirmAssessment').onclick();}
@@ -124,6 +128,9 @@ async function checkStability(){
 }
 async function checkCriteriaImport(){
   context.confirm=()=>true;run('reset();go(1);');
+  elements.get('downloadCriteriaTemplate').onclick();
+  assert.equal(context.savedDownload.name,'CriteriaLab-criteria.txt');
+  assert.equal(run('parseCriteriaText(savedDownload.data).length'),5);
   assert.equal(elements.get('criteriaForm').hidden,true);
   elements.get('showManualCriteria').onclick();assert.equal(elements.get('criteriaForm').hidden,false);
   run('go(2);go(1);');assert.equal(elements.get('criteriaForm').hidden,true);
@@ -147,7 +154,20 @@ async function checkCriteriaImport(){
   context.confirm=()=>true;
   await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[file]}});
   assert.equal(run("criteria.length===2 && criteria.every(c=>c.score===''&&c.comment==='') && !demoMode"),true);
-  console.log('PASS: criteria choices, JSON auto-fill, complete descriptors, invalid-file rejection and protected replacement');
+  const txt=source.map(c=>['Критерий: '+c.name,'Максимум: '+c.max,...c.desc.map((d,i)=>i+': '+d)].join('\n')).join('\n\n');
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[{name:'rubric.txt',size:Buffer.byteLength(txt),text:async()=>txt}]}});
+  assert.equal(run('criteria[0].name'),'Custom criterion');assert.equal(run('criteria[0].desc[4]'),'Custom top descriptor');
+  const docxZip=new zipModule();
+  const escaped=txt.split('\n').filter(Boolean).map(line=>'<w:p><w:r><w:t>'+line.replaceAll('&','&amp;')+'</w:t></w:r></w:p>').join('');
+  docxZip.file('word/document.xml','<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>'+escaped+'</w:body></w:document>');
+  const docx=await docxZip.generateAsync({type:'nodebuffer'});
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[{name:'rubric.docx',size:docx.length,arrayBuffer:async()=>docx}]}});
+  assert.equal(run('criteria[0].name'),'Custom criterion');assert.equal(run('criteria[0].desc[4]'),'Custom top descriptor');
+  const unknown='Some unrelated document';
+  const beforeUnknown=JSON.parse(run('JSON.stringify(snapshot())'));
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[{name:'rubric.txt',size:unknown.length,text:async()=>unknown}]}});
+  assert.deepEqual(JSON.parse(run('JSON.stringify(snapshot())')),beforeUnknown);
+  console.log('PASS: criteria choices, JSON/TXT/DOCX auto-fill, complete descriptors, invalid-file rejection and protected replacement');
 }
 async function checkWorkInput(){
   context.confirm=()=>true;run('reset();');
