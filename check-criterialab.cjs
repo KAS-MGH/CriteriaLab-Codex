@@ -120,6 +120,34 @@ async function checkStability(){
   checkCompactFeedback();
   checkStartOwnWork();
   await checkWorkInput();
+  await checkCriteriaImport();
+}
+async function checkCriteriaImport(){
+  context.confirm=()=>true;run('reset();go(1);');
+  assert.equal(elements.get('criteriaForm').hidden,true);
+  elements.get('showManualCriteria').onclick();assert.equal(elements.get('criteriaForm').hidden,false);
+  run('go(2);go(1);');assert.equal(elements.get('criteriaForm').hidden,true);
+  const source=JSON.parse(run('JSON.stringify(defaults().slice(0,2).map(c=>({name:c.name,max:c.max,desc:c.desc})))'));
+  source[0].name='Custom criterion';source[0].desc[4]='Custom top descriptor';
+  const json=JSON.stringify({format:'CriteriaLab-criteria',version:1,criteria:source});
+  const file={name:'rubric.json',size:Buffer.byteLength(json),text:async()=>json};
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[file]}});
+  assert.equal(elements.get('criteriaForm').hidden,false);
+  assert.equal(run('criteria.length'),2);assert.equal(run('criteria[0].name'),'Custom criterion');
+  assert.equal(run('criteria[0].desc[4]'),'Custom top descriptor');
+  assert.equal(run("criteria.every(c=>c.score===''&&c.comment==='')"),true);
+  const before=JSON.parse(run('JSON.stringify(snapshot())'));
+  const bad=JSON.stringify({format:'CriteriaLab-criteria',version:1,criteria:[{name:'Incomplete',max:4,desc:['Only zero']}]});
+  await elements.get('criteriaFile').onchange({target:{files:[{name:'bad.json',size:bad.length,text:async()=>bad}],value:'bad.json'}});
+  assert.deepEqual(JSON.parse(run('JSON.stringify(snapshot())')),before);
+  run('reset();loadDemo();');const demo=JSON.parse(run('JSON.stringify(snapshot())'));
+  context.confirm=()=>false;
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[file]}});
+  assert.deepEqual(JSON.parse(run('JSON.stringify(snapshot())')),demo);
+  context.confirm=()=>true;
+  await elements.get('criteriaDropZone').events.drop({preventDefault(){},dataTransfer:{files:[file]}});
+  assert.equal(run("criteria.length===2 && criteria.every(c=>c.score===''&&c.comment==='') && !demoMode"),true);
+  console.log('PASS: criteria choices, JSON auto-fill, complete descriptors, invalid-file rejection and protected replacement');
 }
 async function checkWorkInput(){
   context.confirm=()=>true;run('reset();');
