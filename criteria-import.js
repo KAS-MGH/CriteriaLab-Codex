@@ -13,8 +13,53 @@ function parseCriteriaText(text){
     if(descriptor){const score=Number(descriptor[1]);current.desc[score]=descriptor[2].trim();lastScore=score;continue;}
     if(lastScore!==null&&current.desc[lastScore])current.desc[lastScore]+=' '+line;
   }
-  if(!result.length)throw Error('Не найдены строки «Критерий: ...». Скачайте образец и сохраните его как TXT, DOCX или PDF с выделяемым текстом.');
+  if(!result.length)return parseRubricTableText(text);
   return result;
+}
+
+function parseRubricTableText(text){
+  const lines=text.replace(/\r/g,'').split('\n').map(line=>line.trim()).filter(Boolean);
+  const criteria=[];let current=null,band=null;
+  const finishBand=()=>{
+    if(!current||!band)return;
+    const description=band.parts.join(' ').replace(/\s+/g,' ').trim();
+    for(let score=band.low;score<=band.high;score++)current.desc[score]=description;
+    band=null;
+  };
+  const finishCriterion=()=>{
+    finishBand();
+    if(!current)return;
+    current.max=Math.max(current.max||0,current.desc.length-1);
+    if(current.max>0)criteria.push(current);
+    current=null;
+  };
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i];
+    const wordHeading=line.match(/^Criterion\s+[A-Z]\s*:\s*(.+)$/i);
+    const tableHeading=/^(?:Marks?\s+Descriptor|Achievement level)$/i.test(line);
+    if(wordHeading){finishCriterion();current={name:wordHeading[1].trim(),max:null,desc:[]};continue;}
+    if(tableHeading&&!current){
+      const heading=[...lines.slice(Math.max(0,i-3),i)].reverse().find(x=>!x.startsWith('To what extent')&&!/^(?:Marks?|Descriptor)$/i.test(x));
+      if(heading)current={name:heading,max:null,desc:[]};
+      continue;
+    }
+    if(!current)continue;
+    if(/^(?:Maximum|Максимум)\s*:\s*\d+$/i.test(line)){current.max=Number(line.match(/\d+/)[0]);continue;}
+    if(/^(?:Marks?\s+Descriptor|Achievement level|Level descriptor)$/i.test(line))continue;
+    const nextHeading=i+1<lines.length&&(/^(?:Marks?\s+Descriptor)$/i.test(lines[i+1])||/^To what extent/i.test(lines[i+1]));
+    if(nextHeading&&band&&current.desc.length){finishCriterion();current={name:line,max:null,desc:[]};continue;}
+    const scoreLine=line.match(/^(\d{1,2})(?:\s*[–—-]\s*(\d{1,2}))?(?:\s+|\s*[:.]\s*)?(.*)$/);
+    if(scoreLine){
+      const low=Number(scoreLine[1]),high=scoreLine[2]?Number(scoreLine[2]):low;
+      if(high<low||high>20)throw Error('Некорректный диапазон баллов в таблице.');
+      finishBand();band={low,high,parts:scoreLine[3]?[scoreLine[3]]:[]};
+      continue;
+    }
+    if(band)band.parts.push(line);
+  }
+  finishCriterion();
+  if(!criteria.length)throw Error('Не удалось найти критерии и баллы в таблице. Проверьте выделяемый текст или используйте образец.');
+  return criteria;
 }
 
 async function extractCriteriaText(file){

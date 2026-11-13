@@ -1,2 +1,6 @@
 tmp/
+.netlify/
 CriteriaLab-transfer.zip
+.env
+.env.*
+!.env.example
