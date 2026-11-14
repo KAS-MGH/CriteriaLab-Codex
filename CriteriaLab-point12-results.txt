@@ -3,7 +3,7 @@ CriteriaLab — пункт 12: контроль преподавателя
 
 Метод: Node.js, JavaScript из CriteriaLab.html, имитация DOM. Реальная работа браузера и оформление не проверялись.
 
-1. PASS — Summary before confirmation; cancel and intervening edits prevent approval
+1. PASS — Visible final summary and one-click teacher confirmation
 2. PASS — Incomplete assessment is listed in summary and cannot be approved
 3. PASS — Rejecting source, level, rubric changes and deletion preserves complete approved work
 4. PASS — One reset warning per editing session; undo restores original source and assessment, never approval

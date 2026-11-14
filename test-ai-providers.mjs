@@ -29,6 +29,33 @@ const assessed = await runAI({ action: 'assess', provider: 'cloudflare', input: 
 assert.equal(assessed.result.criteria[0].score, 3);
 assert.equal(assessed.result.remarks.length, 1, 'remarks without an exact source quote must be rejected');
 
+const feedbackFetch = async (_url, options) => {
+  const request = JSON.parse(options.body);
+  assert.equal(request.response_format.type, 'json_schema');
+  assert.deepEqual(request.response_format.json_schema.required, ['assessment', 'improvements', 'next']);
+  assert.match(request.prompt, /Do not change, recalculate or question any score/);
+  assert.match(request.prompt, /Translate every learner-facing prose passage/);
+  assert.match(request.prompt, /concrete corrected wording character-for-character/);
+  assert.match(request.prompt, /use linking words/);
+  const result = {
+    assessment: 'Your main idea is clear and the approved score is preserved.',
+    improvements: 'Use more linking words, such as moreover, thus and nevertheless, to connect ideas.',
+    next: 'Add one suitable linking expression when moving between each main point.'
+  };
+  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+const generatedFeedback = await runAI({
+  action: 'feedback', provider: 'cloudflare',
+  input: {
+    text: 'Original mistak.', topic: 'Test', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'en',
+    score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'use linking words' }],
+    remarks: [], strengths: 'Clear idea.', priorities: 'use linking words', next: 'revise links'
+  },
+  env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: feedbackFetch
+});
+assert.match(generatedFeedback.result.improvements, /moreover/);
+assert.equal(generatedFeedback.result.assessment.includes('3 / 4'), false, 'AI body must not restate or alter the fixed score header');
+
 let agreementCalls = 0;
 const agreementFetch = async (_url, options) => {
   agreementCalls++;
@@ -70,4 +97,4 @@ const nestedJsonFetch = async () => new Response(JSON.stringify({ result: { resu
 const nestedJsonResult = await runAI({ action: 'recognize', provider: 'cloudflare', imageDataUrl: tinyImage, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: nestedJsonFetch });
 assert.equal(nestedJsonResult.result.text, 'Clean JSON transcription.');
 
-console.log('PASS: provider selection, image validation, Gemini recognition, Cloudflare assessment and explicit license handling');
+console.log('PASS: provider selection, image validation, Gemini recognition, Cloudflare assessment, expanded feedback and explicit license handling');

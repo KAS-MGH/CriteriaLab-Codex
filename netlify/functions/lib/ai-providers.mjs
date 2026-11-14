@@ -48,6 +48,17 @@ const assessmentSchema = {
   additionalProperties: false
 };
 
+const feedbackSchema = {
+  type: 'object',
+  properties: {
+    assessment: { type: 'string' },
+    improvements: { type: 'string' },
+    next: { type: 'string' }
+  },
+  required: ['assessment', 'improvements', 'next'],
+  additionalProperties: false
+};
+
 function assessmentPrompt(input) {
   const language = input.feedbackLanguage === 'kk' ? 'Kazakh' : input.feedbackLanguage === 'en' ? 'English' : 'Russian';
   return `You are assisting a teacher, not replacing their judgement. Assess only against the supplied task and rubric.
@@ -64,6 +75,38 @@ RUBRIC:
 ${JSON.stringify(input.criteria.map((criterion, index) => ({ index, name: criterion.name, max: criterion.max, descriptors: criterion.descriptors })))}
 
 STUDENT_TEXT:
+${input.text}`;
+}
+
+function feedbackPrompt(input) {
+  const language = input.feedbackLanguage === 'kk' ? 'Kazakh' : input.feedbackLanguage === 'en' ? 'English' : 'Russian';
+  return `You are turning a teacher-approved assessment into clear learner-facing feedback in ${language}.
+Do not change, recalculate or question any score. Use only the supplied approved notes and student text.
+Translate every learner-facing prose passage into ${language}, even when the approved teacher notes were written in another language. The assessment, improvements and next-step sections must be consistently written in ${language}.
+Keep each exact student quotation and its concrete corrected wording character-for-character in the original language. Do not translate individual quoted words, corrections, endings or other language forms being analysed. Translate the explanation around them into ${language}.
+Outside those exact language examples, leave no sentences in the source language. Proper names may remain unchanged.
+Connect repetitive notes, expand very short advice into useful explanations, and add practical examples of strategies or language choices.
+For example, a note such as "use linking words" may be expanded with suitable examples such as "moreover", "in conclusion", "thus" or "nevertheless".
+Do not invent errors, achievements, quotations or task requirements. Exact student quotations may only come from APPROVED_REMARKS.
+Keep the tone supportive and specific. Return plain text inside JSON with three sections and no score header.
+Return JSON only: {"assessment":"...","improvements":"...","next":"..."}
+
+CONTEXT:
+${JSON.stringify({ topic: input.topic || '', genre: input.genre || '', level: input.level || '', task: input.task || '' })}
+
+APPROVED_SCORE:
+${JSON.stringify({ score: input.score, max: input.max })}
+
+APPROVED_CRITERIA:
+${JSON.stringify(input.criteria)}
+
+APPROVED_REMARKS:
+${JSON.stringify(input.remarks || [])}
+
+APPROVED_SUMMARY_FIELDS:
+${JSON.stringify({ strengths: input.strengths || '', priorities: input.priorities || '', next: input.next || '' })}
+
+STUDENT_TEXT_FOR_CONTEXT_ONLY:
 ${input.text}`;
 }
 function stripJsonFence(value) {
@@ -193,7 +236,7 @@ async function cloudflareRecognize({ prompt, image, env, fetchImpl }) {
   return { text: cleanPlainTranscription(text), warnings: ['Сверьте распознанный текст с оригиналом перед оцениванием.'] };
 }
 
-async function cloudflareAssess({ prompt, env, fetchImpl }) {
+async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchImpl }) {
   const { accountId, token } = cloudflareCredentials(env);
   const model = env.CLOUDFLARE_ASSESS_MODEL || DEFAULT_CLOUDFLARE_ASSESS_MODEL;
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`;
@@ -206,7 +249,7 @@ async function cloudflareAssess({ prompt, env, fetchImpl }) {
     prompt,
     temperature: 0,
     max_tokens: 900,
-    response_format: { type: 'json_schema', json_schema: assessmentSchema }
+    response_format: { type: 'json_schema', json_schema: schema }
   };
   let response = await fetchImpl(endpoint, options(request));
   if (!response.ok) {
@@ -293,6 +336,16 @@ function normalizeAssessment(result, input) {
   return { criteria, remarks, strengths: result.strengths.trim(), priorities: result.priorities.trim(), next: result.next.trim() };
 }
 
+function normalizeFeedback(result) {
+  if (!result || typeof result !== 'object') throw new Error('Модель не вернула отзыв.');
+  const normalized = {};
+  for (const field of ['assessment', 'improvements', 'next']) {
+    if (typeof result[field] !== 'string' || !result[field].trim()) throw new Error(`Модель не заполнила раздел ${field}.`);
+    normalized[field] = result[field].trim().slice(0, 6000);
+  }
+  return normalized;
+}
+
 export async function runAI({ action, provider: requestedProvider = 'auto', imageDataUrl, input, env = process.env, fetchImpl = fetch }) {
   const provider = selectProvider(requestedProvider, env);
   if (action === 'recognize') {
@@ -313,6 +366,20 @@ export async function runAI({ action, provider: requestedProvider = 'auto', imag
       ? await geminiGenerate({ prompt, schema: assessmentSchema, env, fetchImpl })
       : await cloudflareAssess({ prompt, env, fetchImpl });
     return { provider, action, result: normalizeAssessment(result, input) };
+  }
+  if (action === 'feedback') {
+    if (!input || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 50000) throw new Error('Для отзыва нужен подтверждённый текст до 50 000 символов.');
+    if (!['en', 'ru', 'kk'].includes(input.feedbackLanguage)) throw new Error('Для отзыва нужно выбрать язык.');
+    if (!Number.isInteger(input.score) || !Number.isInteger(input.max) || input.score < 0 || input.max < 1 || input.score > input.max) throw new Error('Итоговая оценка имеет неверный формат.');
+    if (!Array.isArray(input.criteria) || input.criteria.length < 1 || input.criteria.length > 30) throw new Error('Для отзыва требуется от 1 до 30 критериев.');
+    input.criteria.forEach(criterion => {
+      if (!criterion || typeof criterion.name !== 'string' || !Number.isInteger(criterion.score) || !Number.isInteger(criterion.max) || criterion.score < 0 || criterion.score > criterion.max || typeof criterion.comment !== 'string') throw new Error('Утверждённые критерии имеют неверный формат.');
+    });
+    const prompt = feedbackPrompt(input);
+    const result = provider === 'gemini'
+      ? await geminiGenerate({ prompt, schema: feedbackSchema, env, fetchImpl })
+      : await cloudflareAssess({ prompt, schema: feedbackSchema, env, fetchImpl });
+    return { provider, action, result: normalizeFeedback(result) };
   }
   throw new Error('Неизвестное AI-действие.');
 }

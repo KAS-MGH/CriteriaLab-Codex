@@ -17,8 +17,13 @@ const context=vm.createContext({console,Date,URL,Blob,setTimeout,confirm:()=>tru
 vm.runInContext(fs.readFileSync('criteria-import.js','utf8'),context);
 vm.runInContext(html.match(/<script>([\s\S]*?)<\/script>/)[1],context);
 function run(code){return vm.runInContext(code,context)}
-function approve(){elements.get('approve').onclick();elements.get('confirmAssessment').onclick();}
+function approve(){elements.get('approve').onclick();}
+run("reset();$('genre').value='custom';$('customGenre').value='Review Essay';");
+assert.equal(elements.get('schoolClass').value,'');
+assert.equal(run('genreValue()'),'Review Essay');
+assert.equal(run("snapshot().fields.customGenre"),'Review Essay');
 run('loadDemo();');
+assert.equal(elements.get('schoolClass').value,'9');
 elements.get('finalScore').onclick();
 assert.match(elements.get('finalScoreSummary').innerHTML,/15 \/ 20/);
 approve();elements.get('generate').onclick();elements.get('preview').onclick();
@@ -93,8 +98,10 @@ async function checkStability(){
   passed('Manual final feedback survives import; printing stays blocked until renewed feedback');
   const beforeInvalid=state();
   await importText('{invalid json');assert.deepEqual(state(),beforeInvalid);
+  assert.match(elements.get('status').textContent,/Не удалось открыть черновик/);
   const bad=JSON.parse(JSON.stringify(beforeInvalid));bad.criteria[0].score=99;
   await importText(JSON.stringify(bad));assert.deepEqual(state(),beforeInvalid);
+  assert.match(elements.get('status').textContent,/Некорректные критерии/);
   passed('Malformed JSON and invalid scores do not replace the current work');
   run('dirty=true;');context.confirm=()=>false;
   await importText(JSON.stringify(baseline));assert.deepEqual(state(),beforeInvalid);
@@ -183,6 +190,7 @@ async function checkWorkInput(){
   assert.equal(elements.get('essay').value,'Typed text');
   await drop.events.drop({preventDefault(){},dataTransfer:{files:[{name:'essay.pdf',size:10}]}});
   assert.equal(elements.get('essay').value,'Typed text');
+  assert.match(elements.get('status').textContent,/Поддерживаются TXT, JPG, JPEG и PNG/);
   const photo=Object.assign(new Blob(['fake image'],{type:'image/png'}),{name:'work.png'});
   context.confirm=()=>false;
   await drop.events.drop({preventDefault(){},dataTransfer:{files:[photo]}});
@@ -247,24 +255,20 @@ function checkTeacherControl(){
   const checks=[];
   const state=()=>JSON.parse(run('JSON.stringify(snapshot())'));
   const passed=message=>{checks.push(message);console.log('PASS: '+message)};
-  const demo=()=>{context.confirm=()=>true;run('reset();loadDemo();');};
+  const demo=()=>{context.confirm=()=>true;run('reset();loadDemo();go(2);');};
   const input=(id,value)=>{elements.get(id).value=value;elements.get(id).events.input();};
   const score=value=>elements.get('reviewList').events.input({target:{dataset:{score:'0'},value}});
   demo();
   elements.get('approve').onclick();
-  assert.equal(run('approved'),false);assert.equal(elements.get('approvalActions').hidden,false);
+  assert.equal(run('approved'),true);assert.equal(run('currentStep'),3);
+  assert.equal(elements.get('approvalActions').hidden,true);
   assert.match(elements.get('finalScoreSummary').innerHTML,/15 \/ 20/);
   assert.match(elements.get('finalScoreSummary').innerHTML,/Замечаний в отзыве: <b>3/);
-  elements.get('cancelApproval').onclick();elements.get('confirmAssessment').onclick();
-  assert.equal(run('approved'),false);
-  elements.get('approve').onclick();score('4');elements.get('confirmAssessment').onclick();
-  assert.equal(run('approved'),false);assert.equal(elements.get('approvalActions').hidden,true);
-  approve();elements.get('generate').onclick();assert.equal(elements.get('print').disabled,false);
-  passed('Summary before confirmation; cancel and intervening edits prevent approval');
+  elements.get('generate').onclick();assert.equal(elements.get('print').disabled,false);
+  passed('Visible final summary and one-click teacher confirmation');
   demo();score('');elements.get('approve').onclick();
   assert.match(elements.get('finalScoreSummary').innerHTML,/укажите целый балл/);
-  assert.equal(elements.get('confirmAssessment').disabled,true);
-  elements.get('confirmAssessment').onclick();assert.equal(run('approved'),false);
+  assert.equal(run('approved'),false);assert.equal(run('currentStep'),2);
   passed('Incomplete assessment is listed in summary and cannot be approved');
   demo();approve();elements.get('generate').onclick();
   const original=state();context.confirm=()=>false;
