@@ -68,7 +68,7 @@ CRITERIALAB — СТАТУС MVP
 — Локальная ссылка: http://127.0.0.1:4174/
 — Основной файл: CriteriaLab.html
 — Публикуемая копия: publish-criterialab/index.html
-— SHA256 обеих HTML-копий на момент проверки: DF28C4A321435DF6AF3C9ABA2D7FBE7CF5820A7FC07BA602AF9A215E0B55B777
+— SHA256 обеих HTML-копий на момент проверки: AA09533CB6DFC519C2AF14656B327FC2C838A231C4313B00130E05DC814B7A86
 — Проверка интерфейса: node check-criterialab.cjs — ПРОЙДЕНО.
 — Проверка AI-адаптеров: node test-ai-providers.mjs — ПРОЙДЕНО.
 
