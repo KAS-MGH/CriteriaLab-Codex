@@ -51,11 +51,12 @@ const assessmentSchema = {
 const feedbackSchema = {
   type: 'object',
   properties: {
+    topic: { type: 'string' },
     assessment: { type: 'string' },
     improvements: { type: 'string' },
     next: { type: 'string' }
   },
-  required: ['assessment', 'improvements', 'next'],
+  required: ['topic', 'assessment', 'improvements', 'next'],
   additionalProperties: false
 };
 
@@ -79,17 +80,24 @@ ${input.text}`;
 }
 
 function feedbackPrompt(input) {
-  const language = input.feedbackLanguage === 'kk' ? 'Kazakh' : input.feedbackLanguage === 'en' ? 'English' : 'Russian';
+  const language = input.feedbackLanguage === 'kk' ? 'Kazakh (қазақ тілі, Cyrillic script)' : input.feedbackLanguage === 'en' ? 'English' : 'Russian (русский язык, Cyrillic script)';
   return `You are turning a teacher-approved assessment into clear learner-facing feedback in ${language}.
-Do not change, recalculate or question any score. Use only the supplied approved notes and student text.
-Translate every learner-facing prose passage into ${language}, even when the approved teacher notes were written in another language. The assessment, improvements and next-step sections must be consistently written in ${language}.
+Do not change, recalculate or question any score. Use only the supplied teacher-approved notes below.
+The student's full essay is deliberately not supplied: never reconstruct, retell or reproduce it.
+STRICT LANGUAGE REQUIREMENT: translate every learner-facing prose passage into ${language}, even when the approved teacher notes were written in another language. Write the complete assessment, improvements and next-step sections in ${language}. Merely translating headings is incorrect.
+Translate the essay topic into ${language} as well; it is not a protected language example. If no topic was supplied, return an empty topic.
 Keep each exact student quotation and its concrete corrected wording character-for-character in the original language. Do not translate individual quoted words, corrections, endings or other language forms being analysed. Translate the explanation around them into ${language}.
 Outside those exact language examples, leave no sentences in the source language. Proper names may remain unchanged.
 Connect repetitive notes, expand very short advice into useful explanations, and add practical examples of strategies or language choices.
 For example, a note such as "use linking words" may be expanded with suitable examples such as "moreover", "in conclusion", "thus" or "nevertheless".
 Do not invent errors, achievements, quotations or task requirements. Exact student quotations may only come from APPROVED_REMARKS.
+Section rules are strict:
+- assessment: strengths and successful features from APPROVED_SUMMARY_FIELDS.strengths and positive APPROVED_CRITERIA comments;
+- improvements: priorities, weaknesses and APPROVED_REMARKS, including their approved explanations;
+- next: practical next steps based on APPROVED_SUMMARY_FIELDS.next.
+Do not put strengths under improvements. Do not repeat the same recommendation in improvements and next.
 Keep the tone supportive and specific. Return plain text inside JSON with three sections and no score header.
-Return JSON only: {"assessment":"...","improvements":"...","next":"..."}
+  Return JSON only: {"topic":"...","assessment":"...","improvements":"...","next":"..."}
 
 CONTEXT:
 ${JSON.stringify({ topic: input.topic || '', genre: input.genre || '', level: input.level || '', task: input.task || '' })}
@@ -104,10 +112,7 @@ APPROVED_REMARKS:
 ${JSON.stringify(input.remarks || [])}
 
 APPROVED_SUMMARY_FIELDS:
-${JSON.stringify({ strengths: input.strengths || '', priorities: input.priorities || '', next: input.next || '' })}
-
-STUDENT_TEXT_FOR_CONTEXT_ONLY:
-${input.text}`;
+${JSON.stringify({ strengths: input.strengths || '', priorities: input.priorities || '', next: input.next || '' })}`;
 }
 function stripJsonFence(value) {
   const text = String(value || '').trim();
@@ -336,12 +341,31 @@ function normalizeAssessment(result, input) {
   return { criteria, remarks, strengths: result.strengths.trim(), priorities: result.priorities.trim(), next: result.next.trim() };
 }
 
-function normalizeFeedback(result) {
+function normalizeFeedback(result, input) {
   if (!result || typeof result !== 'object') throw new Error('Модель не вернула отзыв.');
-  const normalized = {};
+  const normalized = { topic: '' };
+  if (input.topic && (!result.topic || typeof result.topic !== 'string')) throw new Error('Модель не перевела тему работы.');
+  if (typeof result.topic === 'string') normalized.topic = result.topic.trim().slice(0, 1000);
   for (const field of ['assessment', 'improvements', 'next']) {
     if (typeof result[field] !== 'string' || !result[field].trim()) throw new Error(`Модель не заполнила раздел ${field}.`);
     normalized[field] = result[field].trim().slice(0, 6000);
+  }
+  const generated = Object.values(normalized).join(' ').toLowerCase().replace(/\s+/g, ' ');
+  const copiedParagraph = String(input.text || '').split(/\n\s*\n/)
+    .map(value => value.trim().toLowerCase().replace(/\s+/g, ' '))
+    .find(value => value.length >= 80 && generated.includes(value));
+  if (copiedParagraph) throw new Error('AI перепечатал фрагмент работы вместо комментария преподавателя. Повторите генерацию.');
+  if (input.feedbackLanguage !== 'en') {
+    let prose = Object.values(normalized).join(' ');
+    for (const remark of input.remarks || []) {
+      for (const value of [remark?.quote, remark?.correction]) if (typeof value === 'string' && value) prose = prose.split(value).join(' ');
+    }
+    const cyrillic = (prose.match(/[\u0400-\u04ff]/g) || []).length;
+    const latin = (prose.match(/[A-Za-z]/g) || []).length;
+    if (cyrillic < 20 || cyrillic / Math.max(1, cyrillic + latin) < 0.35) {
+      const language = input.feedbackLanguage === 'kk' ? 'казахский' : 'русский';
+      throw new Error(`AI не перевёл содержательную часть на ${language} язык. Повторите генерацию.`);
+    }
   }
   return normalized;
 }
@@ -376,10 +400,21 @@ export async function runAI({ action, provider: requestedProvider = 'auto', imag
       if (!criterion || typeof criterion.name !== 'string' || !Number.isInteger(criterion.score) || !Number.isInteger(criterion.max) || criterion.score < 0 || criterion.score > criterion.max || typeof criterion.comment !== 'string') throw new Error('Утверждённые критерии имеют неверный формат.');
     });
     const prompt = feedbackPrompt(input);
-    const result = provider === 'gemini'
-      ? await geminiGenerate({ prompt, schema: feedbackSchema, env, fetchImpl })
-      : await cloudflareAssess({ prompt, schema: feedbackSchema, env, fetchImpl });
-    return { provider, action, result: normalizeFeedback(result) };
+    const providers = requestedProvider === 'auto'
+      ? ['gemini', 'cloudflare'].filter(candidate => configured(candidate, env))
+      : [provider];
+    let lastError;
+    for (const feedbackProvider of providers) {
+      try {
+        const result = feedbackProvider === 'gemini'
+          ? await geminiGenerate({ prompt, schema: feedbackSchema, env, fetchImpl })
+          : await cloudflareAssess({ prompt, schema: feedbackSchema, env, fetchImpl });
+        return { provider: feedbackProvider, action, result: normalizeFeedback(result, input) };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError || new Error('На сервере не настроен ни один AI-провайдер.');
   }
   throw new Error('Неизвестное AI-действие.');
 }

@@ -32,12 +32,15 @@ assert.equal(assessed.result.remarks.length, 1, 'remarks without an exact source
 const feedbackFetch = async (_url, options) => {
   const request = JSON.parse(options.body);
   assert.equal(request.response_format.type, 'json_schema');
-  assert.deepEqual(request.response_format.json_schema.required, ['assessment', 'improvements', 'next']);
+  assert.deepEqual(request.response_format.json_schema.required, ['topic', 'assessment', 'improvements', 'next']);
   assert.match(request.prompt, /Do not change, recalculate or question any score/);
-  assert.match(request.prompt, /Translate every learner-facing prose passage/);
+  assert.match(request.prompt, /translate every learner-facing prose passage/i);
   assert.match(request.prompt, /concrete corrected wording character-for-character/);
   assert.match(request.prompt, /use linking words/);
+  assert.match(request.prompt, /full essay is deliberately not supplied/i);
+  assert.doesNotMatch(request.prompt, /STUDENT_TEXT_FOR_CONTEXT_ONLY/);
   const result = {
+    topic: 'Test',
     assessment: 'Your main idea is clear and the approved score is preserved.',
     improvements: 'Use more linking words, such as moreover, thus and nevertheless, to connect ideas.',
     next: 'Add one suitable linking expression when moving between each main point.'
@@ -55,6 +58,74 @@ const generatedFeedback = await runAI({
 });
 assert.match(generatedFeedback.result.improvements, /moreover/);
 assert.equal(generatedFeedback.result.assessment.includes('3 / 4'), false, 'AI body must not restate or alter the fixed score header');
+
+const copiedEssay = 'In my opinion, university elections are important because they give students a voice in campus life and help everyone improve the university together.';
+const copiedEssayFetch = async () => {
+  const result = { topic: 'University elections', assessment: copiedEssay, improvements: 'Check grammar.', next: 'Proofread.' };
+  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+await assert.rejects(
+  runAI({
+    action: 'feedback', provider: 'cloudflare',
+    input: {
+      text: copiedEssay, topic: 'University elections', feedbackLanguage: 'en', score: 15, max: 20,
+      criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check grammar.' }],
+      remarks: [], strengths: 'Clear opinion.', priorities: 'Check grammar.', next: 'Proofread.'
+    },
+    env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: copiedEssayFetch
+  }),
+  /перепечатал фрагмент работы/
+);
+
+let automaticFeedbackCalls = 0;
+const automaticFeedbackFetch = async (url, options) => {
+  automaticFeedbackCalls++;
+  const result = { topic: 'Сайлаудың маңызы', assessment: 'Оқушы өз пікірін анық білдіріп, дәлелдерін түсінікті ұсынған.', improvements: 'Грамматикалық сәйкестікті мұқият тексеріп, мұғалімнің ескертулерін қолданыңыз.', next: 'Келесі жұмыста әр етістікті бастауышпен қайта салыстырып шығыңыз.' };
+  return new Response(JSON.stringify({ status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify(result) }] }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+const automaticFeedback = await runAI({
+  action: 'feedback', provider: 'auto', input: {
+    text: 'Elections helps students.', topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
+    score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
+    remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
+    strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'
+  },
+  env: { AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'gemini', CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' },
+  fetchImpl: automaticFeedbackFetch
+});
+assert.equal(automaticFeedback.provider, 'gemini', 'automatic feedback must prefer the provider verified for multilingual output');
+assert.equal(automaticFeedbackCalls, 1);
+
+const kazakhInput = {
+  text: 'Elections helps students.', topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
+  score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
+  remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
+  strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'
+};
+const kazakhFetch = async (_url, options) => {
+  const request = JSON.parse(options.body);
+  assert.match(request.prompt, /Kazakh \(қазақ тілі, Cyrillic script\)/);
+  assert.match(request.prompt, /Merely translating headings is incorrect/);
+  const result = {
+    topic: 'Сайлаудың маңызы',
+    assessment: 'Сіз өз пікіріңізді анық білдіріп, негізгі ойды түсінікті жеткіздіңіз.',
+    improvements: 'Бастауыш пен баяндауыштың сәйкестігін мұқият тексеріңіз. “Elections helps students” орнына “Elections help students” нұсқасын қолданыңыз.',
+    next: 'Келесі эсседе әр көпше бастауыштан кейінгі етістік тұлғасын қайта тексеріңіз.'
+  };
+  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+const kazakhFeedback = await runAI({ action: 'feedback', provider: 'cloudflare', input: kazakhInput, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: kazakhFetch });
+assert.match(kazakhFeedback.result.assessment, /Сіз өз пікіріңізді/);
+assert.match(kazakhFeedback.result.improvements, /Elections help students/);
+
+const untranslatedFetch = async () => {
+  const result = { topic: 'Elections', assessment: 'Your opinion is clear.', improvements: 'Check subject and verb agreement carefully.', next: 'Proofread every verb before submitting.' };
+  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+await assert.rejects(
+  runAI({ action: 'feedback', provider: 'cloudflare', input: kazakhInput, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: untranslatedFetch }),
+  /не перевёл содержательную часть/
+);
 
 let agreementCalls = 0;
 const agreementFetch = async (_url, options) => {

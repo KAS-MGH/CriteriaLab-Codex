@@ -22,6 +22,19 @@ run("reset();$('genre').value='custom';$('customGenre').value='Review Essay';");
 assert.equal(elements.get('schoolClass').value,'');
 assert.equal(run('genreValue()'),'Review Essay');
 assert.equal(run("snapshot().fields.customGenre"),'Review Essay');
+run('reset();');
+elements.get('essay').value='Manually entered essay text.';
+elements.get('essay').events.input();
+assert.match(elements.get('textConfirmHint').textContent,/Следующий шаг/);
+elements.get('toCriteria').onclick();
+assert.equal(run('currentStep'),0);
+assert.equal(elements.get('textConfirmed').focused,true);
+assert.match(elements.get('status').textContent,/Поставьте галочку/);
+elements.get('textConfirmed').checked=true;elements.get('textConfirmed').onchange();
+assert.equal(elements.get('textConfirmHint').textContent,'');
+elements.get('toCriteria').onclick();
+assert.equal(run('currentStep'),1);
+console.log('PASS: entered text highlights confirmation; blocked navigation focuses the checkbox; confirmation unlocks criteria');
 run('loadDemo();');
 assert.equal(elements.get('schoolClass').value,'9');
 elements.get('finalScore').onclick();
@@ -41,7 +54,7 @@ approve();elements.get('generate').onclick();
 assert.match(elements.get('printText').textContent,/16 \/ 20/);
 elements.get('language').value='ru';elements.get('language').onchange();listeners.beforeprint();
 assert.equal(elements.get('printText').textContent,'');
-elements.get('generate').onclick();
+run("$('feedback').value='Переведённый отзыв.';feedbackFresh=true;update();");listeners.beforeprint();
 assert.match(elements.get('printMeta').textContent,/Работа: DEMO-01/);
 run('reset();');listeners.beforeprint();
 assert.equal(elements.get('printText').textContent,'');
@@ -128,7 +141,7 @@ async function checkStability(){
     '\n\nВывод: перечисленные сценарии сохранения и повторяемости проходят. Сброс после правки исходного текста/дескрипторов предусмотрен текущим кодом, это не случайная потеря при переходе. После импорта требуется повторное подтверждение и сборка; ручная редактура отзыва сохраняется в файле, но повторная сборка заменяет её текстом из полей.\n\nОстаётся: ручная проверка в браузере на этом компьютере; повтор этих же тестов после изменений. ИИ/OCR отсутствуют, стабильность модели здесь не оценивалась. Автоматическое восстановление после закрытия вкладки отсутствует: нужен сохранённый JSON.\n';
   fs.writeFileSync('CriteriaLab-point10-results.txt',report);
   checkTeacherControl();
-  checkCompactFeedback();
+  await checkCompactFeedback();
   checkStartOwnWork();
   await checkWorkInput();
   await checkCriteriaImport();
@@ -227,10 +240,10 @@ function checkStartOwnWork(){
   context.confirm=()=>true;
   console.log('PASS: starting own work clears untouched demo without warning; protects modified demo, own text and manual feedback; focuses upload');
 }
-function checkCompactFeedback(){
+async function checkCompactFeedback(){
   context.confirm=()=>true;run('reset();loadDemo();');
   run("criteria[0].original.comment='REJECTED ORIGINAL COMMENT';criteria[0].comment='Teacher approved final comment.';remarks.push({quote:'REJECTED QUOTE',correction:'REJECTED CORRECTION',explanation:'REJECTED EXPLANATION',type:'uncertain',include:false});update();");
-  approve();elements.get('generate').onclick();
+  approve();await elements.get('generate').onclick();
   const feedback=elements.get('feedback').value;
   assert.equal(feedback.split('\n\n').length,4);
   const saved=JSON.parse(run('JSON.stringify(snapshot())'));
@@ -243,13 +256,15 @@ function checkCompactFeedback(){
   assert(feedback.includes('Score: 15 / 20'));
   assert.equal(elements.get('printText').textContent,feedback);
   for(const language of ['ru','kk']){
-    elements.get('language').value=language;elements.get('language').onchange();elements.get('generate').onclick();
-    assert(elements.get('feedback').value.includes('Teacher approved final comment.'));
+    elements.get('language').value=language;elements.get('language').onchange();await elements.get('generate').onclick();
+    assert.equal(elements.get('feedback').value,'');
+    assert.equal(run('feedbackFresh'),false);
+    assert.match(elements.get('status').textContent,/AI-перевод/);
   }
   const before=elements.get('feedback').value;run('invalidate();buildFeedback();');
   assert.equal(elements.get('feedback').value,before);
   assert.equal(elements.get('printText').textContent,'');
-  console.log('PASS: compact feedback keeps all approved fields, excludes rejected material, uses four blocks and respects approval across languages');
+  console.log('PASS: English fallback preserves approved fields; failed Russian/Kazakh AI never appears as a mixed-language translation');
 }
 function checkTeacherControl(){
   const checks=[];
