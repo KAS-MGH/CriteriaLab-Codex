@@ -351,4 +351,27 @@ function checkTeacherControl(){
   passed('Reset and loading another work clear undo history');
   fs.writeFileSync('CriteriaLab-point12-results.txt','CriteriaLab — пункт 12: контроль преподавателя\n12 ноября 2026\n\nМетод: Node.js, JavaScript из CriteriaLab.html, имитация DOM. Реальная работа браузера и оформление не проверялись.\n\n'+checks.map((s,i)=>(i+1)+'. PASS — '+s).join('\n')+'\n\nОтмена на один шаг: редактирование одного поля группируется до потери фокуса. Данные восстанавливаются, подтверждение и актуальность отзыва не восстанавливаются. История не экспортируется, очищается при сбросе, загрузке другой работы и смене фото.\n');
 }
-checkStability().catch(error=>{console.error(error);process.exitCode=1});
+async function checkTeacherFeedback(){
+  const fb=()=>elements.get('feedback').value;
+  const rebuild=()=>{run('invalidate();');assert.equal(elements.get('preview').disabled,true,'old feedback must be blocked after an edit');approve();elements.get('generate').onclick();};
+  assert.doesNotMatch(html,/ru-RU|kk-KZ|Қазақша|kk:\[/,'Russian and Kazakh feedback options must be removed');
+  run('reset();');assert.equal(elements.get('language').value,'en','reset keeps English feedback');
+  run('loadDemo();');approve();elements.get('generate').onclick();
+  const essayStart=elements.get('essay').value.slice(0,120);
+  assert.equal(fb().includes(essayStart),false,'feedback must not contain the student text');
+  assert.match(fb(),/Score: 15 \/ 20/);
+  run("criteria[1].comment='Teacher comment: add one more example to the second reason.';");rebuild();
+  assert.match(fb(),/Teacher comment: add one more example to the second reason\./,'edited comment appears in rebuilt feedback');
+  run("remarks[0].correction='elections really help students';remarks[0].explanation='Custom explanation of agreement.';");rebuild();
+  assert.match(fb(),/elections really help students/);assert.match(fb(),/Custom explanation of agreement\./);
+  run('remarks[1].include=false;');rebuild();
+  assert.equal(fb().includes('a candidates explain their plans'),false,'excluded remark is absent');
+  elements.get('strengths').value='Custom strength sentence.';elements.get('next').value='Custom next step.';rebuild();
+  assert.match(fb(),/Custom strength sentence\./);assert.match(fb(),/Custom next step\./);
+  assert.equal(fb().includes(essayStart),false,'feedback still contains no student text');
+  const draft=JSON.stringify({...JSON.parse(JSON.stringify(run('snapshot()'))),language:'kk'});
+  await elements.get('draftFile').onchange({target:{files:[{size:Buffer.byteLength(draft),text:async()=>draft}],value:'draft.json'}});
+  assert.equal(elements.get('language').value,'en','imported draft is always English');
+  console.log('PASS: English-only feedback; edited comment, edited correction, excluded remark, strengths and next step reach the rebuilt feedback; student text never copied');
+}
+checkStability().then(checkTeacherFeedback).catch(error=>{console.error(error);process.exitCode=1});

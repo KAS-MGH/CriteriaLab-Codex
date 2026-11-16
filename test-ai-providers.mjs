@@ -41,85 +41,10 @@ const assessed = await runAI({ action: 'assess', provider: 'cloudflare', input: 
 assert.equal(assessed.result.criteria[0].score, 3);
 assert.equal(assessed.result.remarks.length, 1, 'remarks without an exact source quote must be rejected');
 
-const feedbackFetch = async (_url, options) => {
-  const request = JSON.parse(options.body);
-  assert.equal(request.response_format.type, 'json_schema');
-  assert.deepEqual(request.response_format.json_schema.required, ['topic', 'assessment', 'improvements', 'next']);
-  assert.match(request.prompt, /Do not change, recalculate or question any score/);
-  assert.match(request.prompt, /translate every learner-facing prose passage/i);
-  assert.match(request.prompt, /concrete corrected wording character-for-character/);
-  assert.match(request.prompt, /use linking words/);
-  assert.match(request.prompt, /full essay is deliberately not supplied/i);
-  assert.doesNotMatch(request.prompt, /STUDENT_TEXT_FOR_CONTEXT_ONLY/);
-  assert.doesNotMatch(request.prompt, /Original mistak\./, 'feedback provider must not receive the full essay');
-  const result = {
-    topic: 'Test',
-    assessment: 'Your main idea is clear and the approved score is preserved.',
-    improvements: 'Use more linking words, such as moreover, thus and nevertheless, to connect ideas.',
-    next: 'Add one suitable linking expression when moving between each main point.'
-  };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
-};
-const generatedFeedback = await runAI({
-  action: 'feedback', provider: 'cloudflare',
-  input: {
-    topic: 'Test', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'en',
-    score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'use linking words' }],
-    remarks: [], strengths: 'Clear idea.', priorities: 'use linking words', next: 'revise links'
-  },
-  env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: feedbackFetch
-});
-assert.match(generatedFeedback.result.improvements, /moreover/);
-assert.equal(generatedFeedback.result.assessment.includes('3 / 4'), false, 'AI body must not restate or alter the fixed score header');
-
-let automaticFeedbackCalls = 0;
-const automaticFeedbackFetch = async (url, options) => {
-  automaticFeedbackCalls++;
-  const result = { topic: 'Сайлаудың маңызы', assessment: 'Оқушы өз пікірін анық білдіріп, дәлелдерін түсінікті ұсынған.', improvements: 'Грамматикалық сәйкестікті мұқият тексеріп, мұғалімнің ескертулерін қолданыңыз.', next: 'Келесі жұмыста әр етістікті бастауышпен қайта салыстырып шығыңыз.' };
-  return new Response(JSON.stringify({ status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify(result) }] }] }), { status: 200, headers: { 'content-type': 'application/json' } });
-};
-const automaticFeedback = await runAI({
-  action: 'feedback', provider: 'auto', input: {
-    topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
-    score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
-    remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
-    strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'
-  },
-  env: { AI_PROVIDER: 'cloudflare', GEMINI_API_KEY: 'gemini', CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' },
-  fetchImpl: automaticFeedbackFetch
-});
-assert.equal(automaticFeedback.provider, 'gemini', 'automatic feedback must prefer the provider verified for multilingual output');
-assert.equal(automaticFeedbackCalls, 1);
-
-const kazakhInput = {
-  topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
-  score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
-  remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
-  strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'
-};
-const kazakhFetch = async (_url, options) => {
-  const request = JSON.parse(options.body);
-  assert.match(request.prompt, /Kazakh \(қазақ тілі, Cyrillic script\)/);
-  assert.match(request.prompt, /Merely translating headings is incorrect/);
-  const result = {
-    topic: 'Сайлаудың маңызы',
-    assessment: 'Сіз өз пікіріңізді анық білдіріп, негізгі ойды түсінікті жеткіздіңіз.',
-    improvements: 'Бастауыш пен баяндауыштың сәйкестігін мұқият тексеріңіз. “Elections helps students” орнына “Elections help students” нұсқасын қолданыңыз.',
-    next: 'Келесі эсседе әр көпше бастауыштан кейінгі етістік тұлғасын қайта тексеріңіз.'
-  };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
-};
-const kazakhFeedback = await runAI({ action: 'feedback', provider: 'cloudflare', input: kazakhInput, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: kazakhFetch });
-assert.match(kazakhFeedback.result.assessment, /Сіз өз пікіріңізді/);
-assert.match(kazakhFeedback.result.improvements, /Elections help students/);
-
-const untranslatedFetch = async () => {
-  const result = { topic: 'Elections', assessment: 'Your opinion is clear.', improvements: 'Check subject and verb agreement carefully.', next: 'Proofread every verb before submitting.' };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
-};
 await assert.rejects(
-  runAI({ action: 'feedback', provider: 'cloudflare', input: kazakhInput, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: untranslatedFetch }),
-  /не перевёл содержательную часть/
+  runAI({ action: 'feedback', provider: 'cloudflare', input: { score: 16, max: 20, criteria: [], feedbackLanguage: 'kk' }, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: async () => { throw new Error('no network call expected'); } }),
+  /Неизвестное AI-действие/,
+  'AI feedback generation and translation must be removed from the backend'
 );
 
 let agreementCalls = 0;
@@ -163,4 +88,4 @@ const nestedJsonFetch = async () => new Response(JSON.stringify({ result: { resu
 const nestedJsonResult = await runAI({ action: 'recognize', provider: 'cloudflare', imageDataUrl: tinyImage, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: nestedJsonFetch });
 assert.equal(nestedJsonResult.result.text, 'Clean JSON transcription.');
 
-console.log('PASS: provider selection, image validation, Gemini recognition, Cloudflare assessment, expanded feedback and explicit license handling');
+console.log('PASS: provider selection, image validation, Gemini recognition, Cloudflare assessment, no AI feedback or translation, and explicit license handling');
