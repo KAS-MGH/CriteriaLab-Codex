@@ -77,8 +77,6 @@ nav button.active:not(:disabled):hover{background:#1c4567;border-color:#59c8bd;b
 .criteria-choice{border:1px solid #dce5ed;border-radius:12px;padding:22px;background:#f8fbfd;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:220px}
 .criteria-choice h2{margin:0 0 10px}.criteria-choice p{font-size:14px;color:#526477;max-width:360px}.criteria-choice button{margin-top:10px}
 .criteria-choice.featured{border:2px solid #7dbab6;background:#eef8f5}.criteria-or{align-self:center;text-align:center;color:#64768a;font-weight:700}
-.criteria-choices.demo-active .criteria-choice.featured{border:1px solid #dce5ed;background:#f8fbfd}
-.criteria-choices.demo-active .criteria-choice.manual{border:2px solid #7dbab6;background:#eef8f5}
 .criteria-file-zone{width:100%;border:2px dashed #a5bfca;border-radius:10px;padding:15px;background:white}.criteria-file-zone.dragging{background:#e5f5f2;border-color:#087e83}
 .criteria-file-zone label{margin:0 0 12px}.criteria-file-zone input{margin:0;max-width:100%}
 .ai-tools{border:1px solid #b8d9c5;border-radius:12px;background:#eef8f5;padding:14px;margin-top:12px}.ai-tools label{margin:0 0 10px}.ai-tools select{margin-top:5px}.ai-status{font-size:13px;color:#526477;margin:9px 0 0;white-space:pre-wrap}.ai-actions{display:flex;gap:9px;flex-wrap:wrap}.ai-actions button{flex:1 1 auto}.ai-busy{cursor:progress}
@@ -152,8 +150,7 @@ input[type=file]::file-selector-button:hover{background:#e5e0ff}
 .drop-zone{border-color:#c9c1e5;background:#faf9fe;border-radius:16px}
 .drop-zone.dragging{background:#efecff;border-color:#6557d8}
 .criteria-choice{border-color:#e3deed;border-radius:16px;background:#fbfafe}
-.criteria-choice.featured,.criteria-choices.demo-active .criteria-choice.manual{border-color:#988de2;background:linear-gradient(145deg,#f7f5ff,#efecff)}
-.criteria-choices.demo-active .criteria-choice.featured{border-color:#e3deed;background:#fbfafe}
+.criteria-choice.featured{border-color:#988de2;background:linear-gradient(145deg,#f7f5ff,#efecff)}
 .criteria-file-zone{border-color:#c9c1e5;border-radius:13px}
 .criteria-file-zone.dragging{background:#efecff;border-color:#6557d8}
 .ai-tools{border-color:#d8d1f5;background:#f4f1ff;border-radius:15px}
@@ -258,10 +255,10 @@ header>span{grid-column:3;grid-row:1/3;align-self:center}
 <div class="grid three"><label>Код работы<input id="code" placeholder="Например: 9A-01"></label><label>Класс<input id="schoolClass" placeholder="9"></label><label>Уровень ученика<select id="level"><option value="">Не указан</option><option>A1</option><option>A2</option><option>B1</option><option>B2</option><option>C1</option><option>C2</option></select></label></div>
 <div class="grid"><label>Тема<input id="topic" placeholder="The importance of university elections"></label><div><label>Тип работы<select id="genre"><option value="discussion">Discussion Essay</option><option value="opinion">Opinion Essay</option><option value="narrative">Narrative Essay</option><option value="descriptive">Descriptive Essay</option><option value="expository">Expository Essay</option><option value="argumentative">Argumentative Essay</option><option value="compare-contrast">Compare and Contrast Essay</option><option value="cause-effect">Cause and Effect Essay</option><option value="process">Process Essay</option><option value="definition">Definition Essay</option><option value="analytical">Analytical Essay</option><option value="reflective-personal">Reflective / Personal Essay</option><option value="custom">Указать свой тип</option></select></label><label id="customGenreWrap">Свой тип работы<input id="customGenre" placeholder="Например: Review Essay"></label></div></div>
 <label>Полная инструкция<textarea id="task" placeholder="Что требуется обсудить? Нужны ли разные точки зрения? Каковы условия задания?"></textarea></label><label>Требуемый объём (необязательно)<input id="length" placeholder="Например: 180–220 слов"></label>
-<div class="work-inputs"><div class="input-choice"><h2>Загрузить текст или фото</h2><div id="dropZone" class="drop-zone"><label for="sourceFile"><span class="drop-title">Перетащите файл или выберите на устройстве</span></label><input id="sourceFile" type="file" aria-label="Выбрать файл TXT, JPG, JPEG или PNG" accept=".txt,.jpg,.jpeg,.png,text/plain,image/jpeg,image/png"><p class="file-formats-note">TXT, JPG, JPEG или PNG · до 10 МБ</p></div><div id="photoBox" class="hidden"><img id="previewPhoto" alt="Оригинал письменной работы"><div class="ai-tools"><label>AI-провайдер<select id="aiProvider"><option value="auto">Автоматически</option><option value="gemini">Gemini Flash</option><option value="cloudflare">Cloudflare Workers AI</option></select></label><div class="ai-actions"><button id="recognizeText">Распознать текст</button></div><p id="recognitionInfo" class="ai-status">Фото не отправляется, пока вы не нажмёте «Распознать текст». Для AI — до 4 МБ.</p><p class="ai-status"><b>Для бесплатного тестирования используйте только обезличенные материалы без имён и других персональных данных учеников.</b></p></div></div></div><div class="choice-or" aria-hidden="true">или</div><div class="input-choice"><h2 id="workTextTitle">Текст работы</h2><textarea id="essay" aria-labelledby="workTextTitle" rows="12" placeholder="Вставьте или напишите текст работы, сохранив ошибки оригинала."></textarea><div class="row"><span id="wordCount" class="muted">0 слов</span></div></div></div><label id="textConfirmPrompt" class="text-confirm-prompt"><input type="checkbox" id="textConfirmed" aria-describedby="textConfirmHint"><span class="text-confirm-copy"><span>Я проверил(а) текст: он соответствует оригиналу</span><small id="textConfirmHint" class="text-confirm-hint" aria-live="polite"></small></span></label><div class="actions"><button class="primary" id="toCriteria">К критериям →</button></div></div></section>
+<div class="work-inputs"><div class="input-choice"><h2>Загрузить текст или фото</h2><div id="dropZone" class="drop-zone"><label for="sourceFile"><span class="drop-title">Перетащите файл или выберите на устройстве</span></label><input id="sourceFile" type="file" aria-label="Выбрать файл TXT, JPG, JPEG или PNG" accept=".txt,.jpg,.jpeg,.png,text/plain,image/jpeg,image/png"><p class="file-formats-note">TXT, JPG, JPEG или PNG · до 10 МБ</p></div><div id="photoBox" class="hidden"><img id="previewPhoto" alt="Оригинал письменной работы"><div class="ai-tools"><div class="ai-actions"><button id="recognizeText">Распознать текст</button></div><p id="recognitionInfo" class="ai-status">Фото не отправляется, пока вы не нажмёте «Распознать текст». Для AI — до 4 МБ.</p><p class="ai-status"><b>Для бесплатного тестирования используйте только обезличенные материалы без имён и других персональных данных учеников.</b></p></div></div></div><div class="choice-or" aria-hidden="true">или</div><div class="input-choice"><h2 id="workTextTitle">Текст работы</h2><textarea id="essay" aria-labelledby="workTextTitle" rows="12" placeholder="Вставьте или напишите текст работы, сохранив ошибки оригинала."></textarea><div class="row"><span id="wordCount" class="muted">0 слов</span></div></div></div><label id="textConfirmPrompt" class="text-confirm-prompt"><input type="checkbox" id="textConfirmed" aria-describedby="textConfirmHint"><span class="text-confirm-copy"><span>Я проверил(а) текст: он соответствует оригиналу</span><small id="textConfirmHint" class="text-confirm-hint" aria-live="polite"></small></span></label><div class="actions"><button class="primary" id="toCriteria">К критериям →</button></div></div></section>
 <section class="page" id="page1"><div class="panel"><h1>Критерии оценивания</h1><p class="muted">Выберите способ добавления критериев. После загрузки все поля можно проверить и изменить.</p><div id="criteriaChoices" class="criteria-choices"><div class="criteria-choice featured"><h2>Загрузить критерии</h2><div id="criteriaDropZone" class="criteria-file-zone"><input id="criteriaFile" type="file" aria-label="Выбрать файл критериев" accept=".json,.txt,.docx,.pdf,application/json,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf"></div><p id="criteriaFileHelp">JSON, TXT, Word (DOCX) или PDF с выделяемым текстом. Таблицы с баллами и дескрипторами тоже можно загрузить; проверьте результат перед оцениванием. Скан без выделяемого текста пока не распознаётся.</p><button id="downloadCriteriaTemplate">Скачать образец файла</button></div><div class="criteria-or" aria-hidden="true">или</div><div class="criteria-choice manual"><h2>Настроить вручную</h2><p>Используйте готовые пять критериев или измените их под своё задание.</p><button id="showManualCriteria">Открыть форму критериев</button></div></div><div id="criteriaForm" hidden><div id="limitations" class="notice warning"></div><div id="criteriaEditor"></div><button id="addCriterion">+ Добавить критерий</button><div class="actions"><button data-go="0">← Письменная работа</button><button class="primary" id="toReview">К оцениванию →</button></div></div></div></section>
 <section class="page" id="page2"><div class="panel"><div class="row"><h1>Оценивание письменной работы</h1><span id="total" class="score">0 / 20</span></div><div id="reviewMode" class="notice"></div><div class="review-start"><button class="primary" id="aiAssess">Получить готовый разбор с AI</button><p id="assessmentInfo" class="ai-status">AI подготовит черновик оценки для проверки преподавателем.</p></div><details id="manualAssessment" class="manual-assessment"><summary>Посмотреть разбор или изменить его вручную</summary><div class="manual-assessment-body"><p class="muted">При необходимости измените предложенные баллы и комментарии.</p><div id="reviewList"></div><h2>Примеры и объяснения</h2><div id="remarks"></div><button id="addRemark">+ Добавить замечание</button><div class="grid" style="margin-top:20px"><label>Сильные стороны<textarea id="strengths" placeholder="Что получилось хорошо?"></textarea></label><label>Что улучшить<textarea id="priorities" placeholder="На чём сосредоточиться?"></textarea></label></div><label>Рекомендации к следующей работе<textarea id="next" placeholder="2–3 конкретных действия для ученика"></textarea></label><div class="notice">Предложения AI сохраняются отдельно от правок преподавателя.</div></div><section id="finalScoreSummary" class="result-summary" aria-live="polite" hidden></section></details><button id="finalScore" aria-expanded="false" aria-controls="finalScoreSummary" hidden>Итоговая оценка</button><div id="approvalActions" hidden><button id="cancelApproval" hidden>Продолжить редактирование</button><button id="confirmAssessment" hidden>Подтверждаю итоговую оценку</button></div><div class="actions"><button class="primary" id="approve">Подтвердить оценивание и перейти к отзыву →</button></div></div></section>
-<section class="page" id="page3"><div class="panel"><h1>Обратная связь ученику</h1><div id="approvalStatus" class="notice warning"></div><label>Язык отзыва<select id="language"><option value="">Выберите язык</option><option value="en">English</option><option value="ru">Русский</option><option value="kk">Қазақша</option></select></label><p class="muted" style="font-size:14px">Комментарии, объяснения и рекомендации создаются на выбранном языке. Точные цитаты и исправленные английские варианты сохраняются без перевода.</p><div class="feedback-generate"><button class="primary" id="generate">Сгенерировать отзыв</button></div><label>Итоговый отзыв — проверьте и при необходимости отредактируйте<textarea id="feedback" placeholder="После подтверждения оценивания сгенерируйте отзыв."></textarea></label><div class="actions"><button id="copy">Скопировать</button><button id="downloadText">Скачать TXT</button><button id="preview" aria-expanded="false" aria-controls="feedbackPreview">Предпросмотр печати</button><button class="primary" id="print">Печать / сохранить PDF</button></div><section id="feedbackPreview" class="preview-wrap" hidden><h2>Предпросмотр отзыва</h2><p class="preview-note">Шаблон для A4. В PDF длинный отзыв может занять несколько страниц. Точные переносы видны в диалоге печати браузера.</p><article class="feedback-sheet"><div class="sheet-brand">CriteriaLab</div><div id="previewMeta" class="sheet-meta"></div><div id="previewText" class="sheet-text"></div></article></section></div></section>
+<section class="page" id="page3"><div class="panel"><h1>Обратная связь ученику</h1><div id="approvalStatus" class="notice warning"></div><input id="language" type="hidden" value="en"><p class="muted" style="font-size:14px">Отзыв составляется на английском языке из утверждённых преподавателем баллов, комментариев и примеров исправлений.</p><div class="feedback-generate"><button class="primary" id="generate">Собрать итоговый отзыв</button></div><label>Итоговый отзыв — проверьте и при необходимости отредактируйте<textarea id="feedback" placeholder="После подтверждения оценивания соберите отзыв."></textarea></label><div class="actions"><button id="copy">Скопировать</button><button id="downloadText">Скачать TXT</button><button id="preview" aria-expanded="false" aria-controls="feedbackPreview">Предпросмотр печати</button><button class="primary" id="print">Печать / сохранить PDF</button></div><section id="feedbackPreview" class="preview-wrap" hidden><h2>Предпросмотр отзыва</h2><p class="preview-note">Шаблон для A4. В PDF длинный отзыв может занять несколько страниц. Точные переносы видны в диалоге печати браузера.</p><article class="feedback-sheet"><div class="sheet-brand">CriteriaLab</div><div id="previewMeta" class="sheet-meta"></div><div id="previewText" class="sheet-text"></div></article></section></div></section>
 <div id="status" role="status" aria-live="polite"></div>
 <details class="panel"><summary>О проекте и возможностях прототипа</summary><p>CriteriaLab помогает преподавателю оценивать письменные работы, объяснять ошибки и готовить отзыв по прозрачным критериям. Окончательное решение всегда принимает преподаватель.</p><p>Сейчас работают ручное оценивание, учебный деморазбор, импорт и редактирование критериев, замечания с точными цитатами, подтверждение итоговой оценки, сборка отзыва, печать и сохранение черновика в файл. При настроенной защищённой серверной функции AI может подготовить распознанный текст и черновик оценивания, которые преподаватель обязан проверить.</p><p>Развитие проекта сосредоточено на качестве работы с письменными материалами: точности распознавания, соответствии оценки заданным критериям, прозрачности исправлений и полезности итогового отзыва.</p><p>Без запуска AI данные остаются в браузере пользователя. При запуске AI изображение или подтверждённый текст передаются настроенному внешнему провайдеру для обработки и не сохраняются приложением автоматически. Используйте только синтетические или обезличенные материалы. До закрытия вкладки скачайте черновик: в него входят текст и оценки, но не фото. Баллы авторской шкалы не являются официальной экзаменационной оценкой.</p></details>
 </main><footer>CriteriaLab · Учебный проект · Окончательная оценка и обратная связь утверждаются преподавателем.</footer>
@@ -270,8 +267,8 @@ header>span{grid-column:3;grid-row:1/3;align-self:center}
 <script src="criteria-import.js"></script>
 <script>
 'use strict';
-const criterionNames={en:['Task fulfilment','Development of arguments','Organisation and coherence','Vocabulary and style','Grammar, spelling and punctuation'],kk:['Тапсырманың орындалуы','Дәлелдердің дамуы','Мәтіннің құрылымы мен байланысы','Сөздік қор және стиль','Грамматика, емле және тыныс белгілері']};
-function criterionTitle(name){const i=definitions.findIndex(d=>d[0]===name);return i>=0&&criterionNames[document.getElementById('language').value]?criterionNames[document.getElementById('language').value][i]:name;}
+const criterionNames={en:['Task fulfilment','Development of arguments','Organisation and coherence','Vocabulary and style','Grammar, spelling and punctuation']};
+function criterionTitle(name){const i=definitions.findIndex(d=>d[0]===name);return i>=0?criterionNames.en[i]:name;}
 const $=id=>document.getElementById(id);
 const definitions=[
 ['Выполнение задания',['Нет материала для оценки.','Тема затронута минимально; основные требования не выполнены.','Тема раскрыта частично; часть требований пропущена.','Основные требования выполнены, есть отдельные упущения.','Тема раскрыта полностью; все явно заданные требования выполнены.']],
@@ -306,7 +303,7 @@ function allowSourceChange(){return !hasAssessment()||confirm('Изменени�
 function restoreSnapshot(state){
   fields.forEach(id=>$(id).value=state.fields[id]);
   criteria=copyState(state.criteria);remarks=copyState(state.remarks);
-  $('textConfirmed').checked=state.textConfirmed;$('language').value=state.language;$('feedback').value=state.feedback;
+  $('textConfirmed').checked=state.textConfirmed;$('language').value='en';$('feedback').value=state.feedback;
   demoMode=state.demoMode;approved=false;feedbackFresh=false;pendingApproval=false;dirty=true;
   renderCriteria();renderReview();update();
 }
@@ -386,13 +383,13 @@ function validationIssues(){
   return issues;
 }
 function validate(){return validationIssues()[0]||'';}
-const translations={en:{title:'Feedback on your essay',score:'Score',criteria:'Assessment criteria',strong:'What you did well',improve:'What to improve',examples:'Examples and explanations',original:'Original',correction:'Suggested version',reason:'Explanation',next:'For your next essay',style:'Style suggestion',error:'Error',level:'Level not specified: the assessment is provisional.',task:'Full task instructions were not provided: task fulfilment is provisional.'},ru:{title:'Обратная связь по эссе',score:'Оценка',criteria:'Критерии оценивания',strong:'Что получилось хорошо',improve:'Что улучшить',examples:'Примеры и объяснения',original:'Исходный фрагмент',correction:'Предлагаемый вариант',reason:'Объяснение',next:'Для следующего эссе',style:'Стилистическая рекомендация',error:'Ошибка',level:'Уровень не указан: оценка предварительная.',task:'Полная инструкция не предоставлена: выполнение задания оценено предварительно.'},kk:{title:'Эссе бойынша кері байланыс',score:'Баға',criteria:'Бағалау критерийлері',strong:'Жақсы орындалған тұстар',improve:'Жақсартуды қажет ететін тұстар',examples:'Мысалдар мен түсіндірмелер',original:'Бастапқы үзінді',correction:'Ұсынылған нұсқа',reason:'Түсіндірме',next:'Келесі эссеге ұсыныстар',style:'Стильдік ұсыныс',error:'Қате',level:'Тіл деңгейі көрсетілмеген: бағалау алдын ала жасалды.',task:'Тапсырманың толық нұсқаулығы берілмеген: тапсырманың орындалуы алдын ала бағаланды.'}};
+const translations={en:{title:'Feedback on your essay',score:'Score',criteria:'Assessment criteria',strong:'What you did well',improve:'What to improve',examples:'Examples and explanations',original:'Original',correction:'Suggested version',reason:'Explanation',next:'For your next essay',style:'Style suggestion',error:'Error',level:'Level not specified: the assessment is provisional.',task:'Full task instructions were not provided: task fulfilment is provisional.'}};
 function inlineFeedback(value){return String(value).trim().replace(/\s+/g,' ');}
 function feedbackSentence(value){const text=inlineFeedback(value);return !text||/[.!?…:;]["”’']?$/.test(text)?text:text+'.';}
 function buildFeedback(){
   if(!approved)return;
   const error=validate();if(error){say(error);return;}
-  const t=translations[$('language').value];if(!t){say('Выберите язык отзыва.');return;}
+  const t=translations.en;
   const [score,max]=totals();
   const heading=[t.title,$('topic').value.trim(),t.score+': '+score+' / '+max,t.criteria+': '+criteria.map(c=>criterionTitle(c.name)+' '+c.score+'/'+c.max).join(' · ')].filter(Boolean).join('\n');
   // Keep every approved teacher comment. No model paraphrasing or new claims.
@@ -404,42 +401,11 @@ function buildFeedback(){
   $('feedback').value=[heading,assessment,improvements,next,warnings].filter(Boolean).join('\n\n');
   lastBuiltFeedback=$('feedback').value;feedbackFresh=true;dirty=true;update();say('Компактный отзыв собран из утверждённых полей. Проверьте его перед печатью.');
 }
-async function generateFeedback(){
-  if(!approved)return;
-  const error=validate();if(error){say(error);return;}
-  const feedbackLanguage=$('language').value,previousFeedback=$('feedback').value,previousFresh=feedbackFresh;
-  let fallback='';
-  if(feedbackLanguage==='en'){buildFeedback();fallback=$('feedback').value;}
-  aiBusy=true;$('generate').classList.add('ai-busy');$('generate').textContent='Генерация…';update();
-  try{
-    const [score,max]=totals();
-    const body=await callAI({action:'feedback',provider:$('aiProvider').value,input:{
-      text:$('essay').value,topic:$('topic').value,genre:genreValue(),level:$('level').value,task:$('task').value,
-      feedbackLanguage,score,max,
-      criteria:criteria.map(c=>({name:c.name,score:Number(c.score),max:c.max,comment:c.comment})),
-      remarks:remarks.filter(r=>r.include),strengths:$('strengths').value,priorities:$('priorities').value,next:$('next').value
-    }});
-    const t=translations[feedbackLanguage];
-    const heading=[t.title,body.result.topic||$('topic').value.trim(),t.score+': '+score+' / '+max,t.criteria+': '+criteria.map(c=>criterionTitle(c.name)+' '+c.score+'/'+c.max).join(' · ')].filter(Boolean).join('\n');
-    const warnings=[!$('level').value?t.level:'',!$('task').value.trim()?t.task:''].filter(Boolean).join(' ');
-    $('feedback').value=[heading,body.result.assessment,t.improve+': '+body.result.improvements,t.next+': '+body.result.next,warnings].filter(Boolean).join('\n\n');
-    lastBuiltFeedback=$('feedback').value;feedbackFresh=true;dirty=true;update();
-    say('Отзыв сгенерирован с AI из утверждённых данных. Проверьте формулировки перед печатью.');
-  }catch(error){
-    if(feedbackLanguage==='en'){
-      $('feedback').value=fallback;lastBuiltFeedback=fallback;feedbackFresh=true;dirty=true;update();
-      say('AI сейчас недоступен. Создан структурированный отзыв без потери утверждённых данных.');
-    }else{
-      $('feedback').value=previousFresh?previousFeedback:'';lastBuiltFeedback=$('feedback').value;feedbackFresh=previousFresh;dirty=true;update();
-      const languageName=feedbackLanguage==='kk'?'казахский':'русский';
-      say('AI-перевод на '+languageName+' не выполнен. Утверждённые данные сохранены; повторите после подключения AI.');
-    }
-  }finally{aiBusy=false;$('generate').classList.remove('ai-busy');$('generate').textContent='Сгенерировать отзыв';update();}
-}
+function generateFeedback(){buildFeedback();}
 
 function download(name,data,type){let u=URL.createObjectURL(new Blob([data],{type}));let a=document.createElement('a');a.href=u;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);}
 function snapshot(){return{format:'CriteriaLab',version:1,fields:Object.fromEntries(fields.map(id=>[id,$(id).value])),textConfirmed:$('textConfirmed').checked,criteria,remarks,language:$('language').value,feedback:$('feedback').value,demoMode};}
-function reset(){demoBaseline=null;lastBuiltFeedback='';clearUndo();pendingApproval=false;aiBusy=false;$('finalScoreSummary').hidden=true;$('finalScore').setAttribute('aria-expanded','false');fields.forEach(id=>$(id).value='');$('genre').value='discussion';$('textConfirmed').checked=false;$('feedback').value='';$('language').value='';$('sourceFile').value='';$('criteriaFile').value='';$('aiProvider').value='auto';$('recognitionInfo').textContent='Фото не отправляется, пока вы не нажмёте «Распознать текст». Для AI — до 4 МБ.';$('assessmentInfo').textContent='Кнопка доступна только после подтверждения распознанного текста. AI заполняет черновик; итог утверждает преподаватель.';if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;sourceImageFile=null;$('photoBox').classList.add('hidden');criteria=defaults();remarks=[];demoMode=false;approved=false;feedbackFresh=false;dirty=false;renderCriteria();renderReview();go(0);}
+function reset(){demoBaseline=null;lastBuiltFeedback='';clearUndo();pendingApproval=false;aiBusy=false;$('finalScoreSummary').hidden=true;$('finalScore').setAttribute('aria-expanded','false');fields.forEach(id=>$(id).value='');$('genre').value='discussion';$('textConfirmed').checked=false;$('feedback').value='';$('language').value='';$('sourceFile').value='';$('criteriaFile').value='';$('recognitionInfo').textContent='Фото не отправляется, пока вы не нажмёте «Распознать текст». Для AI — до 4 МБ.';$('assessmentInfo').textContent='Кнопка доступна только после подтверждения распознанного текста. AI заполняет черновик; итог утверждает преподаватель.';if(photoURL)URL.revokeObjectURL(photoURL);photoURL=null;sourceImageFile=null;$('photoBox').classList.add('hidden');criteria=defaults();remarks=[];demoMode=false;approved=false;feedbackFresh=false;dirty=false;renderCriteria();renderReview();go(0);}
 function loadDemo(){if(dirty&&!confirm('Заменить текущую работу демопримером? Сначала сохраните нужный черновик.'))return;reset();demoMode=true;$('code').value='DEMO-01';$('schoolClass').value='9';$('level').value='B1';$('topic').value='The importance of university elections';$('genre').value='opinion';$('task').value='Write an opinion essay explaining why university elections are important. Give two reasons and support them with examples. This is a synthetic demonstration task.';$('length').value='180–220 words';$('essay').value=`In my opinion, university elections are important because they give students a voice in campus life. I believe that choosing representatives can make the university a better place for everyone.
 
 First, elections helps students choose leaders who understand their concerns. For example, students may want longer library opening hours during exams. An elected representative can discuss this idea with the university and explain why it matters. This gives students a clear way to suggest changes instead of only complaining to their friends.
@@ -455,11 +421,9 @@ fields.forEach(id=>$(id).addEventListener('input',()=>{
   rememberChange('field:'+id);
   if(id==='essay')$('textConfirmed').checked=false;
   sourceChanged();
-  if(id==='level')$('language').value=['B1','B2','C1','C2'].includes($('level').value)?'en':(['A1','A2'].includes($('level').value)?'ru':'');
   update();
 }));
 $('textConfirmed').onchange=()=>{rememberChange();invalidate();};
-$('language').onchange=()=>{rememberChange();pendingApproval=false;feedbackFresh=false;dirty=true;$('feedback').value='';lastBuiltFeedback='';update();const names={en:'английском',ru:'русском',kk:'казахском'};say($('language').value?'Выбран отзыв на '+names[$('language').value]+' языке. Нажмите «Сгенерировать отзыв».':'Выберите язык отзыва.');};
 $('feedback').oninput=()=>{rememberChange('feedback');dirty=true;feedbackFresh=true;update();};
 
 $('toCriteria').onclick=()=>{
@@ -524,7 +488,7 @@ $('addRemark').onclick=()=>{rememberChange();remarks.push({quote:'',correction:'
 $('approve').onclick=()=>{
   editKey=null;$('manualAssessment').open=true;$('finalScoreSummary').hidden=false;renderFinalScore();
   const err=validate();if(err){approved=false;update();$('finalScoreSummary').scrollIntoView({behavior:'smooth',block:'start'});say('Перед подтверждением исправьте пункты в итоговой оценке.');return;}
-  approved=true;feedbackFresh=false;go(3);say('Оценивание подтверждено. Теперь сгенерируйте отзыв.');
+  approved=true;feedbackFresh=false;go(3);say('Оценивание подтверждено. Теперь соберите итоговый отзыв.');
 };
 $('cancelApproval').onclick=()=>{pendingApproval=false;update();say('Можно продолжить редактирование.');};
 $('confirmAssessment').onclick=()=>{
@@ -541,6 +505,7 @@ function readFileAsDataURL(file){return new Promise((resolve,reject)=>{const rea
 async function callAI(payload){
   const response=await fetch('/.netlify/functions/ai',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const body=await response.json().catch(()=>({}));
+  if(response.status===404)throw Error('Локальный сервер не запускает AI-функцию. Для распознавания используйте опубликованный сайт или Netlify Dev.');
   if(!response.ok||!body.ok)throw Error(body.error||'AI-сервис временно недоступен.');
   return body;
 }
@@ -549,7 +514,7 @@ $('recognizeText').onclick=async()=>{
   if(sourceImageFile.size>4*1024*1024){say('Для AI-распознавания уменьшите изображение до 4 МБ. Просматривать его можно и без AI.');return;}
   aiBusy=true;$('recognizeText').classList.add('ai-busy');$('recognitionInfo').textContent='Распознавание выполняется…';update();
   try{
-    const body=await callAI({action:'recognize',provider:$('aiProvider').value,imageDataUrl:await readFileAsDataURL(sourceImageFile)});
+    const body=await callAI({action:'recognize',provider:'auto',imageDataUrl:await readFileAsDataURL(sourceImageFile)});
     rememberChange();$('essay').value=body.result.text;$('textConfirmed').checked=false;sourceChanged();
     const warnings=body.result.warnings?.length?'\nПредупреждения: '+body.result.warnings.join('; '):'';
     $('recognitionInfo').textContent='Провайдер: '+body.provider+'. Сверьте весь текст с фото и исправьте ошибки перед подтверждением.'+warnings;
@@ -563,8 +528,8 @@ $('aiAssess').onclick=async()=>{
   if(hasAssessment()&&!confirm('AI заменит текущие баллы, комментарии и рекомендации черновиком оценивания. Продолжить?'))return;
   aiBusy=true;$('aiAssess').classList.add('ai-busy');$('assessmentInfo').textContent='AI анализирует подтверждённый текст и критерии…';update();
   try{
-    const feedbackLanguage=$('language').value||(['B1','B2','C1','C2'].includes($('level').value)?'en':'ru');
-    const body=await callAI({action:'assess',provider:$('aiProvider').value,input:{text:$('essay').value,topic:$('topic').value,genre:genreValue(),level:$('level').value,task:$('task').value,expectedLength:$('length').value,feedbackLanguage,criteria:criteria.map(c=>({name:c.name,max:c.max,descriptors:c.desc}))}});
+    const feedbackLanguage='en';
+    const body=await callAI({action:'assess',provider:'auto',input:{text:$('essay').value,topic:$('topic').value,genre:genreValue(),level:$('level').value,task:$('task').value,expectedLength:$('length').value,feedbackLanguage,criteria:criteria.map(c=>({name:c.name,max:c.max,descriptors:c.desc}))}});
     rememberChange();demoMode=false;
     body.result.criteria.forEach(result=>{const c=criteria[result.index];c.score=result.score;c.comment=result.comment;c.original={score:result.score,comment:result.comment};});
     remarks=body.result.remarks;$('strengths').value=body.result.strengths;$('priorities').value=body.result.priorities;$('next').value=body.result.next;
@@ -589,7 +554,7 @@ async function handleSourceFile(file){
     clearUndo();if(photoURL)URL.revokeObjectURL(photoURL);
     $('essay').value='';
     sourceImageFile=file;photoURL=URL.createObjectURL(file);$('previewPhoto').src=photoURL;$('photoBox').classList.remove('hidden');
-    $('recognitionInfo').textContent=file.size>4*1024*1024?'Фото открыто, но для AI его нужно уменьшить до 4 МБ.':'Фото ещё не отправлено. Нажмите «Распознать текст», чтобы передать его выбранному AI-провайдеру.';
+    $('recognitionInfo').textContent=file.size>4*1024*1024?'Фото открыто, но для AI его нужно уменьшить до 4 МБ.':'Фото ещё не отправлено. Нажмите «Распознать текст», чтобы передать его защищённой AI-функции.';
     $('textConfirmed').checked=false;sourceChanged();
     say('Фото открыто. Можно ввести текст вручную или запустить AI-распознавание.');
   }else say('Поддерживаются TXT, JPG, JPEG и PNG.');

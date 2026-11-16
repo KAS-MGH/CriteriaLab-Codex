@@ -298,6 +298,14 @@ export function selectProvider(requested, env = process.env) {
   return first;
 }
 
+function selectProviderForAction(action, requested, env) {
+  if ((!requested || requested === 'auto') && action === 'recognize') {
+    if (configured('cloudflare', env)) return 'cloudflare';
+    if (configured('gemini', env)) return 'gemini';
+  }
+  return selectProvider(requested, env);
+}
+
 export function parseImageDataUrl(dataUrl) {
   const match = /^data:(image\/(?:jpeg|png));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
   if (!match) throw new Error('Поддерживаются изображения JPG и PNG в формате data URL.');
@@ -350,11 +358,6 @@ function normalizeFeedback(result, input) {
     if (typeof result[field] !== 'string' || !result[field].trim()) throw new Error(`Модель не заполнила раздел ${field}.`);
     normalized[field] = result[field].trim().slice(0, 6000);
   }
-  const generated = Object.values(normalized).join(' ').toLowerCase().replace(/\s+/g, ' ');
-  const copiedParagraph = String(input.text || '').split(/\n\s*\n/)
-    .map(value => value.trim().toLowerCase().replace(/\s+/g, ' '))
-    .find(value => value.length >= 80 && generated.includes(value));
-  if (copiedParagraph) throw new Error('AI перепечатал фрагмент работы вместо комментария преподавателя. Повторите генерацию.');
   if (input.feedbackLanguage !== 'en') {
     let prose = Object.values(normalized).join(' ');
     for (const remark of input.remarks || []) {
@@ -371,7 +374,7 @@ function normalizeFeedback(result, input) {
 }
 
 export async function runAI({ action, provider: requestedProvider = 'auto', imageDataUrl, input, env = process.env, fetchImpl = fetch }) {
-  const provider = selectProvider(requestedProvider, env);
+  const provider = selectProviderForAction(action, requestedProvider, env);
   if (action === 'recognize') {
     const image = parseImageDataUrl(imageDataUrl);
     const result = provider === 'gemini'
@@ -392,7 +395,7 @@ export async function runAI({ action, provider: requestedProvider = 'auto', imag
     return { provider, action, result: normalizeAssessment(result, input) };
   }
   if (action === 'feedback') {
-    if (!input || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 50000) throw new Error('Для отзыва нужен подтверждённый текст до 50 000 символов.');
+    if (!input || typeof input !== 'object') throw new Error('Для отзыва нужны утверждённые данные оценивания.');
     if (!['en', 'ru', 'kk'].includes(input.feedbackLanguage)) throw new Error('Для отзыва нужно выбрать язык.');
     if (!Number.isInteger(input.score) || !Number.isInteger(input.max) || input.score < 0 || input.max < 1 || input.score > input.max) throw new Error('Итоговая оценка имеет неверный формат.');
     if (!Array.isArray(input.criteria) || input.criteria.length < 1 || input.criteria.length > 30) throw new Error('Для отзыва требуется от 1 до 30 критериев.');

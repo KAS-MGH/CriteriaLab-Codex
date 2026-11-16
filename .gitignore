@@ -1,4 +1,5 @@
 tmp/
+.mvp-presentation-build/
 .netlify/
 CriteriaLab-transfer.zip
 .env

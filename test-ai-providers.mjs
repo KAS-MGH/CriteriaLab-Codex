@@ -16,6 +16,18 @@ const geminiFetch = async (_url, options) => {
 const recognized = await runAI({ action: 'recognize', provider: 'gemini', imageDataUrl: tinyImage, env: { GEMINI_API_KEY: 'secret' }, fetchImpl: geminiFetch });
 assert.equal(recognized.result.text, 'Original mistak.');
 
+let automaticOcrUrl = '';
+const automaticOcr = await runAI({
+  action: 'recognize', provider: 'auto', imageDataUrl: tinyImage,
+  env: { AI_PROVIDER: 'gemini', GEMINI_API_KEY: 'gemini', CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' },
+  fetchImpl: async url => {
+    automaticOcrUrl = url;
+    return new Response(JSON.stringify({ result: { answer: 'Cloudflare OCR text.' } }), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+});
+assert.equal(automaticOcr.provider, 'cloudflare', 'automatic OCR must prefer the specialized Cloudflare model');
+assert.match(automaticOcrUrl, /api\.cloudflare\.com/);
+
 const criteria = [{ name: 'Accuracy', max: 4, descriptors: ['none', 'low', 'partial', 'good', 'excellent'] }];
 const cloudflareFetch = async (_url, options) => {
   assert.match(options.headers.authorization, /^Bearer /);
@@ -39,6 +51,7 @@ const feedbackFetch = async (_url, options) => {
   assert.match(request.prompt, /use linking words/);
   assert.match(request.prompt, /full essay is deliberately not supplied/i);
   assert.doesNotMatch(request.prompt, /STUDENT_TEXT_FOR_CONTEXT_ONLY/);
+  assert.doesNotMatch(request.prompt, /Original mistak\./, 'feedback provider must not receive the full essay');
   const result = {
     topic: 'Test',
     assessment: 'Your main idea is clear and the approved score is preserved.',
@@ -50,7 +63,7 @@ const feedbackFetch = async (_url, options) => {
 const generatedFeedback = await runAI({
   action: 'feedback', provider: 'cloudflare',
   input: {
-    text: 'Original mistak.', topic: 'Test', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'en',
+    topic: 'Test', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'en',
     score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'use linking words' }],
     remarks: [], strengths: 'Clear idea.', priorities: 'use linking words', next: 'revise links'
   },
@@ -58,24 +71,6 @@ const generatedFeedback = await runAI({
 });
 assert.match(generatedFeedback.result.improvements, /moreover/);
 assert.equal(generatedFeedback.result.assessment.includes('3 / 4'), false, 'AI body must not restate or alter the fixed score header');
-
-const copiedEssay = 'In my opinion, university elections are important because they give students a voice in campus life and help everyone improve the university together.';
-const copiedEssayFetch = async () => {
-  const result = { topic: 'University elections', assessment: copiedEssay, improvements: 'Check grammar.', next: 'Proofread.' };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
-};
-await assert.rejects(
-  runAI({
-    action: 'feedback', provider: 'cloudflare',
-    input: {
-      text: copiedEssay, topic: 'University elections', feedbackLanguage: 'en', score: 15, max: 20,
-      criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check grammar.' }],
-      remarks: [], strengths: 'Clear opinion.', priorities: 'Check grammar.', next: 'Proofread.'
-    },
-    env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: copiedEssayFetch
-  }),
-  /перепечатал фрагмент работы/
-);
 
 let automaticFeedbackCalls = 0;
 const automaticFeedbackFetch = async (url, options) => {
@@ -85,7 +80,7 @@ const automaticFeedbackFetch = async (url, options) => {
 };
 const automaticFeedback = await runAI({
   action: 'feedback', provider: 'auto', input: {
-    text: 'Elections helps students.', topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
+    topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
     score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
     remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
     strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'
@@ -97,7 +92,7 @@ assert.equal(automaticFeedback.provider, 'gemini', 'automatic feedback must pref
 assert.equal(automaticFeedbackCalls, 1);
 
 const kazakhInput = {
-  text: 'Elections helps students.', topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
+  topic: 'Elections', genre: 'opinion', level: 'B1', task: 'Write an opinion.', feedbackLanguage: 'kk',
   score: 3, max: 4, criteria: [{ name: 'Accuracy', score: 3, max: 4, comment: 'Check subject–verb agreement.' }],
   remarks: [{ quote: 'Elections helps students', correction: 'Elections help students', explanation: 'Use help with a plural subject.', type: 'error', include: true }],
   strengths: 'Clear opinion.', priorities: 'Check agreement.', next: 'Proofread verbs.'

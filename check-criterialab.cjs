@@ -1,5 +1,10 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const html=fs.readFileSync('CriteriaLab.html','utf8');
+assert.doesNotMatch(html,/id="aiProvider"|AI-провайдер/,'provider routing must stay in the backend, not the user interface');
+assert.doesNotMatch(html,/\.criteria-choices\.demo-active/,'demo mode must not make criteria upload look inactive');
+assert.match(html,/action:'recognize',provider:'auto'/,'OCR provider must be selected by the backend');
+assert.doesNotMatch(html,/action:'feedback'[\s\S]{0,300}text:\$\('essay'\)\.value/,'feedback request must not contain the full essay');
+assert.equal(html,fs.readFileSync('publish-criterialab/index.html','utf8'),'published HTML must match the source HTML');
 const elements=new Map();
 for(const [,id] of html.matchAll(/\bid="([^"]+)"/g)) elements.set(id,{
   value:'',textContent:'',innerHTML:'',hidden:/id="(?:finalScoreSummary|feedbackPreview)"/.test('id="'+id+'"'),
@@ -52,10 +57,9 @@ assert.equal(elements.get('printText').textContent,'');
 assert.equal(elements.get('preview').disabled,true);
 approve();elements.get('generate').onclick();
 assert.match(elements.get('printText').textContent,/16 \/ 20/);
-elements.get('language').value='ru';elements.get('language').onchange();listeners.beforeprint();
-assert.equal(elements.get('printText').textContent,'');
-run("$('feedback').value='Переведённый отзыв.';feedbackFresh=true;update();");listeners.beforeprint();
-assert.match(elements.get('printMeta').textContent,/Работа: DEMO-01/);
+assert.match(html,/<input id="language" type="hidden" value="en">/);
+listeners.beforeprint();
+assert.match(elements.get('printMeta').textContent,/Work: DEMO-01/);
 run('reset();');listeners.beforeprint();
 assert.equal(elements.get('printText').textContent,'');
 run("loadDemo();criteria[0].score='';update();");elements.get('finalScore').onclick();
@@ -255,16 +259,12 @@ async function checkCompactFeedback(){
   for(const id of ['strengths','priorities','next'])assert(feedback.includes(elements.get(id).value.replace(/\s+/g,' ')));
   assert(feedback.includes('Score: 15 / 20'));
   assert.equal(elements.get('printText').textContent,feedback);
-  for(const language of ['ru','kk']){
-    elements.get('language').value=language;elements.get('language').onchange();await elements.get('generate').onclick();
-    assert.equal(elements.get('feedback').value,'');
-    assert.equal(run('feedbackFresh'),false);
-    assert.match(elements.get('status').textContent,/AI-перевод/);
-  }
+  assert.doesNotMatch(html,/option value="(?:ru|kk)"/);
+  assert.doesNotMatch(html,/action:'feedback'/);
   const before=elements.get('feedback').value;run('invalidate();buildFeedback();');
   assert.equal(elements.get('feedback').value,before);
   assert.equal(elements.get('printText').textContent,'');
-  console.log('PASS: English fallback preserves approved fields; failed Russian/Kazakh AI never appears as a mixed-language translation');
+  console.log('PASS: final English feedback preserves every approved comment and included correction without a second AI request');
 }
 function checkTeacherControl(){
   const checks=[];
