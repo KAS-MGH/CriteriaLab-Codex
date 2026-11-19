@@ -502,6 +502,16 @@ $('copy').onclick=async()=>{try{await navigator.clipboard.writeText($('feedback'
 $('save').onclick=()=>{download('CriteriaLab-draft.json',JSON.stringify(snapshot(),null,2),'application/json');dirty=false;say('Черновик скачан. Он содержит текст и оценки, но не фото.');};$('load').onclick=()=>$('draftFile').click();
 $('draftFile').onchange=async e=>{let f=e.target.files[0];if(!f)return;try{if(f.size>2e6)throw Error('Размер черновика больше 2 МБ.');let d=JSON.parse(await f.text());if(d.format!=='CriteriaLab'||d.version!==1||!d.fields||!Array.isArray(d.criteria)||d.criteria.length<1||d.criteria.length>30||!Array.isArray(d.remarks)||d.remarks.length>100)throw Error('Неверный формат черновика.');for(let c of d.criteria)if(typeof c.name!=='string'||!Number.isInteger(c.max)||c.max<1||c.max>20||!Array.isArray(c.desc)||c.desc.some(x=>typeof x!=='string')||typeof c.comment!=='string'||!(c.score===''||(Number.isInteger(Number(c.score))&&Number(c.score)>=0&&Number(c.score)<=c.max))||(c.original&&(!Number.isFinite(c.original.score)||typeof c.original.comment!=='string')))throw Error('Некорректные критерии.');for(let r of d.remarks)if(!['quote','correction','explanation'].every(k=>typeof r[k]==='string')||!['error','style','uncertain'].includes(r.type)||typeof r.include!=='boolean')throw Error('Некорректные замечания.');if(dirty&&!confirm('Заменить текущую работу сохранённым черновиком?'))return;reset();fields.forEach(id=>$(id).value=typeof d.fields[id]==='string'?d.fields[id]:'');criteria=d.criteria;remarks=d.remarks;$('textConfirmed').checked=!!d.textConfirmed;$('language').value='en';$('feedback').value=typeof d.feedback==='string'?d.feedback:'';demoMode=!!d.demoMode;approved=false;feedbackFresh=false;dirty=false;renderCriteria();renderReview();go(0);say('Черновик открыт. Проверьте данные и повторно подтвердите оценивание; старый отзыв пока недоступен для печати.');}catch(err){say('Не удалось открыть черновик: '+err.message);}finally{e.target.value='';}};
 function readFileAsDataURL(file){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Не удалось прочитать изображение.'));reader.readAsDataURL(file);});}
+async function imageForAI(file){
+  // Always re-encode the photo: applies EXIF rotation and shrinks big phone photos (faster OCR, no time-outs).
+  try{
+    const bmp=await createImageBitmap(file,{imageOrientation:'from-image'}); // applies the phone's EXIF rotation, so the AI never gets an upside-down photo
+    const scale=Math.min(1,1800/Math.max(bmp.width,bmp.height));
+        const c=document.createElement('canvas');c.width=Math.round(bmp.width*scale);c.height=Math.round(bmp.height*scale);
+    const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bmp,0,0,c.width,c.height);bmp.close&&bmp.close();
+    return c.toDataURL('image/jpeg',0.85);
+  }catch(e){return await readFileAsDataURL(file);}
+}
 async function callAI(payload){
   const response=await fetch('/.netlify/functions/ai',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)});
   const body=await response.json().catch(()=>({}));
@@ -511,10 +521,10 @@ async function callAI(payload){
 }
 $('recognizeText').onclick=async()=>{
   if(!sourceImageFile)return;
-  if(sourceImageFile.size>4*1024*1024){say('Для AI-распознавания уменьшите изображение до 4 МБ. Просматривать его можно и без AI.');return;}
+  if(sourceImageFile.size>20*1024*1024){say('Для AI-распознавания выберите изображение меньше 20 МБ. Просматривать его можно и без AI.');return;}
   aiBusy=true;$('recognizeText').classList.add('ai-busy');$('recognitionInfo').textContent='Распознавание выполняется…';update();
   try{
-    const body=await callAI({action:'recognize',provider:'auto',imageDataUrl:await readFileAsDataURL(sourceImageFile)});
+    const body=await callAI({action:'recognize',provider:'auto',imageDataUrl:await imageForAI(sourceImageFile)});
     rememberChange();$('essay').value=body.result.text;$('textConfirmed').checked=false;sourceChanged();
     const warnings=body.result.warnings?.length?'\nПредупреждения: '+body.result.warnings.join('; '):'';
     $('recognitionInfo').textContent='Провайдер: '+body.provider+'. Сверьте весь текст с фото и исправьте ошибки перед подтверждением.'+warnings;

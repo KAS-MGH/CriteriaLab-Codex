@@ -3,6 +3,8 @@ const DEFAULT_CLOUDFLARE_OCR_MODEL = '@cf/moondream/moondream3.1-9B-A2B';
 const DEFAULT_CLOUDFLARE_ASSESS_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const CLOUDFLARE_LLAMA32_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
 
+const TOTAL_BUDGET_MS = Number(process.env.AI_TOTAL_BUDGET_MS) || 28500; // Netlify synchronous functions stop at ~30 s
+
 const recognitionPrompt = `Transcribe the student's handwritten or printed work exactly as it appears.
 Preserve paragraphs, spelling, grammar, punctuation and mistakes. Do not correct, complete or rewrite the text.
 Respect the natural reading order. If a word cannot be read, write [неразборчиво].
@@ -48,6 +50,20 @@ const assessmentSchema = {
   additionalProperties: false
 };
 
+// PDF/DOCX import repeats one long band description for every score in the band.
+// Merge identical neighbours into "lo-hi: text" and cap the length so the request stays small and fast.
+export function compactDescriptors(descriptors) {
+  const out = [];
+  for (let i = 0; i < descriptors.length;) {
+    const text = String(descriptors[i] ?? '').replace(/s+/g, ' ').trim();
+    let j = i;
+    while (j + 1 < descriptors.length && String(descriptors[j + 1] ?? '').replace(/s+/g, ' ').trim() === text) j++;
+    if (text) out.push(`${i === j ? i : i + '-' + j}: ${text.length > 300 ? text.slice(0, 300) + '…' : text}`);
+    i = j + 1;
+  }
+  return out;
+}
+
 function assessmentPrompt(input) {
   return `You are assisting a teacher, not replacing their judgement. Assess only against the supplied task and rubric.
 Write learner-facing comments in English. Do not invent requirements that are missing from the task.
@@ -60,7 +76,7 @@ TASK_CONTEXT:
 ${JSON.stringify({ topic: input.topic || '', genre: input.genre || '', level: input.level || '', task: input.task || '', expectedLength: input.expectedLength || '' })}
 
 RUBRIC:
-${JSON.stringify(input.criteria.map((criterion, index) => ({ index, name: criterion.name, max: criterion.max, descriptors: criterion.descriptors })))}
+${JSON.stringify(input.criteria.map((criterion, index) => ({ index, name: criterion.name, max: criterion.max, descriptors: compactDescriptors(criterion.descriptors) })))}
 
 STUDENT_TEXT:
 ${input.text}`;
@@ -135,20 +151,46 @@ async function geminiGenerate({ prompt, image, schema, env, fetchImpl }) {
   const model = env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
   const input = [{ type: 'text', text: prompt }];
   if (image) input.push({ type: 'image', mime_type: image.mimeType, data: image.base64 });
-  const response = await fetchImpl('https://generativelanguage.googleapis.com/v1beta/interactions', {
+  const send = generationConfig => fetchImpl('https://generativelanguage.googleapis.com/v1beta/interactions', {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey, 'api-revision': '2026-05-20' },
     body: JSON.stringify({
       model,
       input,
       response_format: { type: 'text', mime_type: 'application/json', schema },
-      generation_config: { temperature: 0 },
+      generation_config: generationConfig,
       store: false
     })
   });
+  // Low thinking effort makes Gemini much faster; fall back to the plain request if the API rejects the field.
+  let response = await send({ temperature: 0, thinking_level: 'low' });
+  if (response.status === 400) response = await send({ temperature: 0 });
   const body = await responseJson(response, 'Gemini');
   if (body?.status && body.status !== 'completed') throw new Error(`Gemini не завершил запрос: ${body.status}.`);
   return parseJson(geminiText(body), 'Gemini');
+}
+
+// Google Cloud Vision: dedicated handwriting/document OCR. Fast and does not use the Gemini free quota.
+async function visionRecognize({ image, env, fetchImpl }) {
+  const apiKey = env.GOOGLE_CLOUD_VISION_API_KEY;
+  if (!apiKey) throw new Error('На сервере не задан GOOGLE_CLOUD_VISION_API_KEY.');
+  const response = await fetchImpl('https://vision.googleapis.com/v1/images:annotate', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
+    body: JSON.stringify({
+      requests: [{
+        image: { content: image.base64 },
+        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        imageContext: { languageHints: ['en'] }
+      }]
+    })
+  });
+  const body = await responseJson(response, 'Google Vision');
+  const item = body?.responses?.[0];
+  if (item?.error) throw new Error(`Google Vision: ${item.error.message || 'ошибка распознавания'}`);
+  const text = (item?.fullTextAnnotation?.text || '').trim();
+  if (!text) throw new Error('Google Vision не нашёл текст на изображении.');
+  return { text, warnings: ['Сверьте распознанный текст с оригиналом перед оцениванием.'] };
 }
 
 function cloudflareCredentials(env) {
@@ -205,7 +247,7 @@ async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchI
   const request = {
     prompt,
     temperature: 0,
-    max_tokens: 900,
+    max_tokens: 1500,
     response_format: { type: 'json_schema', json_schema: schema }
   };
   let response = await fetchImpl(endpoint, options(request));
@@ -225,7 +267,9 @@ async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchI
 }
 
 function configured(provider, env) {
-  return provider === 'gemini'
+  return provider === 'vision'
+    ? Boolean(env.GOOGLE_CLOUD_VISION_API_KEY)
+    : provider === 'gemini'
     ? Boolean(env.GEMINI_API_KEY)
     : provider === 'cloudflare'
       ? Boolean(env.CLOUDFLARE_ACCOUNT_ID && env.CLOUDFLARE_API_TOKEN)
@@ -236,9 +280,14 @@ export function availableProviders(env = process.env) {
   return ['gemini', 'cloudflare'].filter(provider => configured(provider, env));
 }
 
+// Providers usable for text recognition, in the order they are tried (no secrets exposed).
+export function ocrProviders(env = process.env) {
+  return ['vision', 'cloudflare', 'gemini'].filter(provider => configured(provider, env));
+}
+
 export function selectProvider(requested, env = process.env) {
   const allowed = ['auto', 'gemini', 'cloudflare'];
-  if (!allowed.includes(requested || 'auto')) throw new Error('Неизвестный AI-провайдер.');
+  if (!allowed.includes(requested || 'auto') && requested !== 'vision') throw new Error('Неизвестный AI-провайдер.');
   if (requested && requested !== 'auto') {
     if (!configured(requested, env)) throw new Error(`Провайдер ${requested} не настроен на сервере.`);
     return requested;
@@ -252,6 +301,7 @@ export function selectProvider(requested, env = process.env) {
 
 function selectProviderForAction(action, requested, env) {
   if ((!requested || requested === 'auto') && action === 'recognize') {
+    if (configured('vision', env)) return 'vision';
     if (configured('cloudflare', env)) return 'cloudflare';
     if (configured('gemini', env)) return 'gemini';
   }
@@ -301,16 +351,60 @@ function normalizeAssessment(result, input) {
   return { criteria, remarks, strengths: result.strengths.trim(), priorities: result.priorities.trim(), next: result.next.trim() };
 }
 
-export async function runAI({ action, provider: requestedProvider = 'auto', imageDataUrl, input, env = process.env, fetchImpl = fetch }) {
-  const provider = selectProviderForAction(action, requestedProvider, env);
+// With provider "auto" the preferred provider is tried first, the others only if it fails.
+// Not raced in parallel: the Gemini free tier allows only 20 requests per day.
+const FIRST_PROVIDER_MS = 20000; // leave time for the fallback provider
+const VALIDATION_ERRORS = /Для оценивания нужен|Для оценивания требуется|Критерии имеют|Поддерживаются изображения|не больше 4 МБ|Неизвестное AI-действие/;
+
+export async function runAI(request) {
+  const { action, provider: requestedProvider = 'auto', env = process.env } = request;
+  const first = selectProviderForAction(action, requestedProvider, env);
+  const auto = !requestedProvider || requestedProvider === 'auto';
+  const pool = action === 'recognize' ? ['vision', 'cloudflare', 'gemini'].filter(name => configured(name, env)) : availableProviders(env);
+  const providers = auto ? [first, ...pool.filter(name => name !== first)] : [first];
+  const baseFetch = request.fetchImpl || fetch;
+  const startedAt = Date.now();
+  const attempt = (provider, index) => {
+    const left = TOTAL_BUDGET_MS - (Date.now() - startedAt);
+    const fetchImpl = (url, options = {}) => baseFetch(url, { ...options, signal: AbortSignal.timeout(Math.max(1000, index < providers.length - 1 ? Math.min(left - 500, FIRST_PROVIDER_MS) : left - 500)) });
+    return runWithProvider(provider, { ...request, fetchImpl });
+  };
+  return new Promise((resolve, reject) => {
+    let pending = 0, finished = false;
+    const errors = [];
+    let lastMessage = '';
+    const settle = (fn, value) => { if (!finished) { finished = true; fn(value); } };
+    const launch = (provider, index = providers.indexOf(provider)) => {
+      pending++;
+      attempt(provider, index).then(result => settle(resolve, result), error => {
+        if (VALIDATION_ERRORS.test(error.message)) return settle(reject, error);
+        const message = error?.name === 'TimeoutError' || error?.name === 'AbortError' ? 'превышено время ожидания' : error.message;
+        console.error(`CriteriaLab ${provider} failed:`, message);
+        lastMessage = message;
+        errors.push(`${provider}: ${message}`);
+        const next = providers[index + 1];
+        if (next && !finished) launch(next, index + 1);
+      }).finally(() => {
+        pending--;
+        if (pending === 0 && !finished) settle(reject, new Error(providers.length > 1 ? `Все AI-провайдеры не ответили. ${errors.join(' | ')}` : lastMessage));
+      });
+    };
+    launch(providers[0], 0);
+  });
+}
+
+async function runWithProvider(provider, { action, imageDataUrl, input, env = process.env, fetchImpl = fetch }) {
   if (action === 'recognize') {
     const image = parseImageDataUrl(imageDataUrl);
-    const result = provider === 'gemini'
+    const result = provider === 'vision'
+      ? await visionRecognize({ image, env, fetchImpl })
+      : provider === 'gemini'
       ? await geminiGenerate({ prompt: recognitionPrompt, image, schema: recognitionSchema, env, fetchImpl })
       : await cloudflareRecognize({ prompt: recognitionPrompt, image, env, fetchImpl });
     return { provider, action, result: normalizeRecognition(result) };
   }
   if (action === 'assess') {
+    if (provider === 'vision') throw new Error('Неизвестное AI-действие: Google Vision выполняет только распознавание.');
     if (!input || typeof input.text !== 'string' || !input.text.trim() || input.text.length > 50000) throw new Error('Для оценивания нужен подтверждённый текст до 50 000 символов.');
     if (!Array.isArray(input.criteria) || input.criteria.length < 1 || input.criteria.length > 30) throw new Error('Для оценивания требуется от 1 до 30 критериев.');
     input.criteria.forEach(criterion => {
