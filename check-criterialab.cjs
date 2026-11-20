@@ -57,7 +57,7 @@ assert.equal(elements.get('printText').textContent,'');
 assert.equal(elements.get('preview').disabled,true);
 approve();elements.get('generate').onclick();
 assert.match(elements.get('printText').textContent,/16 \/ 20/);
-assert.match(html,/<input id="language" type="hidden" value="en">/);
+assert.match(html,/<select id="language"><option value="en">English[^<]*<\/option><option value="ru">[^<]*<\/option><option value="kk">/);
 listeners.beforeprint();
 assert.match(elements.get('printMeta').textContent,/Work: DEMO-01/);
 run('reset();');listeners.beforeprint();

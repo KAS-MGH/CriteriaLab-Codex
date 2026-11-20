@@ -29,16 +29,24 @@ assert.equal(automaticOcr.provider, 'cloudflare', 'automatic OCR must prefer the
 assert.match(automaticOcrUrl, /api\.cloudflare\.com/);
 
 const criteria = [{ name: 'Accuracy', max: 4, descriptors: ['none', 'low', 'partial', 'good', 'excellent'] }];
+const cfReply = request => {
+  const props = request.response_format.json_schema.properties;
+  const result = props.score
+    ? { score: 3, comment: 'Хорошая работа.' }
+    : { remarks: [{ quote: 'mistak', correction: 'mistake', explanation: 'Spelling.', type: 'error', include: true }, { quote: 'invented', correction: '', explanation: '', type: 'error' }], strengths: 'Ясная мысль.', priorities: 'Проверить написание.', next: 'Вычитать текст.' };
+  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+let cfCalls = 0;
 const cloudflareFetch = async (_url, options) => {
   assert.match(options.headers.authorization, /^Bearer /);
   const request = JSON.parse(options.body);
-  assert.equal(request.max_tokens, 1500);
+  cfCalls++;
   assert.equal(request.response_format.type, 'json_schema');
-  const result = { criteria: [{ index: 0, score: 3, comment: 'Хорошая работа.' }], remarks: [{ quote: 'mistak', correction: 'mistake', explanation: 'Spelling.', type: 'error', include: true }, { quote: 'invented', correction: '', explanation: '', type: 'error' }], strengths: 'Ясная мысль.', priorities: 'Проверить написание.', next: 'Вычитать текст.' };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+  return cfReply(request);
 };
 const assessed = await runAI({ action: 'assess', provider: 'cloudflare', input: { text: 'Original mistak.', criteria, feedbackLanguage: 'ru' }, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token' }, fetchImpl: cloudflareFetch });
 assert.equal(assessed.result.criteria[0].score, 3);
+assert.equal(cfCalls, 2, 'Cloudflare must send one request per criterion plus one for remarks and summary');
 assert.equal(assessed.result.remarks.length, 1, 'remarks without an exact source quote must be rejected');
 
 await assert.rejects(
@@ -47,18 +55,16 @@ await assert.rejects(
   'AI feedback generation and translation must be removed from the backend'
 );
 
-let agreementCalls = 0;
+let agreed = false;
 const agreementFetch = async (_url, options) => {
-  agreementCalls++;
   const request = JSON.parse(options.body);
-  if (agreementCalls === 1) return new Response(JSON.stringify({ errors: [{ message: 'Model Agreement: submit agree' }] }), { status: 403, headers: { 'content-type': 'application/json' } });
-  if (agreementCalls === 2) { assert.equal(request.prompt, 'agree'); return new Response(JSON.stringify({ result: { response: 'agreed' } }), { status: 200, headers: { 'content-type': 'application/json' } }); }
-  const result = { criteria: [{ index: 0, score: 3, comment: 'Хорошая работа.' }], remarks: [], strengths: 'Ясная мысль.', priorities: 'Проверить написание.', next: 'Вычитать текст.' };
-  return new Response(JSON.stringify({ result: { response: JSON.stringify(result) } }), { status: 200, headers: { 'content-type': 'application/json' } });
+  if (request.prompt === 'agree') { agreed = true; return new Response(JSON.stringify({ result: { response: 'agreed' } }), { status: 200, headers: { 'content-type': 'application/json' } }); }
+  if (!agreed) return new Response(JSON.stringify({ errors: [{ message: 'Model Agreement: submit agree' }] }), { status: 403, headers: { 'content-type': 'application/json' } });
+  return cfReply(request);
 };
 const agreementResult = await runAI({ action: 'assess', provider: 'cloudflare', input: { text: 'Original mistak.', criteria, feedbackLanguage: 'ru' }, env: { CLOUDFLARE_ACCOUNT_ID: 'account', CLOUDFLARE_API_TOKEN: 'token', CLOUDFLARE_ASSESS_MODEL: '@cf/meta/llama-3.2-11b-vision-instruct', CLOUDFLARE_LLAMA32_AGREED: 'true' }, fetchImpl: agreementFetch });
 assert.equal(agreementResult.result.criteria[0].score, 3);
-assert.equal(agreementCalls, 3);
+assert.ok(agreed);
 
 const plainTextFetch = async (_url, options) => {
   const request = JSON.parse(options.body);
@@ -96,7 +102,7 @@ const fallbackFetch = async url => String(url).includes("cloudflare")
 const fallbackEnv = { AI_PROVIDER: "cloudflare", CLOUDFLARE_ACCOUNT_ID: "a", CLOUDFLARE_API_TOKEN: "t", GEMINI_API_KEY: "g" };
 const fallbackResult = await runAI({ action: "assess", provider: "auto", input: fallbackInput, env: fallbackEnv, fetchImpl: fallbackFetch });
 assert.equal(fallbackResult.provider, "gemini");
-await assert.rejects(runAI({ action: "assess", provider: "cloudflare", input: fallbackInput, env: fallbackEnv, fetchImpl: fallbackFetch }), /неполный набор/);
+await assert.rejects(runAI({ action: "assess", provider: "cloudflare", input: fallbackInput, env: fallbackEnv, fetchImpl: fallbackFetch }), /Модель вернула/);
 
 // PDF imports repeat one band text for several scores: merge them.
 assert.deepEqual(compactDescriptors(['', 'weak', 'weak', 'weak', 'good', 'good']), ['1-3: weak', '4-5: good']);
@@ -117,4 +123,46 @@ const visionFallback = await runAI({ action: 'recognize', provider: 'auto', imag
   : new Response(JSON.stringify({ result: { answer: 'Cloudflare backup.' } }), { status: 200, headers: { 'content-type': 'application/json' } }) });
 assert.equal(visionFallback.provider, 'cloudflare');
 await assert.rejects(runAI({ action: 'assess', provider: 'vision', input: fallbackInput, env: visionEnv, fetchImpl: async () => { throw new Error('no call'); } }), /только распознавание/);
+
+// Groq goes first for assessment when configured, even if AI_PROVIDER says otherwise; Cloudflare is the last resort.
+const groqOk = { criteria: [{ index: 0, score: 4, comment: 'Groq comment.' }], remarks: [], strengths: 'a', priorities: 'b', next: 'c' };
+const urls = [];
+const groqEnv = { AI_PROVIDER: 'cloudflare', GROQ_API_KEY: 'q', GEMINI_API_KEY: 'g', CLOUDFLARE_ACCOUNT_ID: 'a', CLOUDFLARE_API_TOKEN: 't' };
+const groqResult = await runAI({ action: 'assess', provider: 'auto', input: fallbackInput, env: groqEnv, fetchImpl: async (url, options) => {
+  urls.push(String(url));
+  assert.equal(JSON.parse(options.body).response_format.type, 'json_object');
+  return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify(groqOk) } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+} });
+assert.equal(groqResult.provider, 'groq');
+assert.equal(urls.length, 1);
+assert.match(urls[0], /api.groq.com/);
+const groqFallback = await runAI({ action: 'assess', provider: 'auto', input: fallbackInput, env: groqEnv, fetchImpl: async (url, o) => String(url).includes('groq')
+  ? new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } }) : fallbackFetch(url, o) });
+assert.equal(groqFallback.provider, 'gemini', 'a Groq failure must fall through to Gemini');
+const noGroqOcr = await runAI({ action: 'recognize', provider: 'auto', imageDataUrl: tinyImage, env: { GROQ_API_KEY: 'q', CLOUDFLARE_ACCOUNT_ID: 'a', CLOUDFLARE_API_TOKEN: 't' }, fetchImpl: async url => { assert.doesNotMatch(String(url), /groq/); return new Response(JSON.stringify({ result: { answer: 'ok text' } }), { status: 200, headers: { 'content-type': 'application/json' } }); } });
+assert.equal(noGroqOcr.provider, 'cloudflare');
+assert.match(compactDescriptors(['a  b', 'a b', 'c'])[0], /^0-1: a b$/);
+
+// Translation to Russian/Kazakh: Groq first, Gemini as backup, strict shape checks.
+const trInput = { language: 'kk', texts: ['Good work.', 'Fix spelling.'] };
+const trEnv = { GROQ_API_KEY: 'q', GEMINI_API_KEY: 'g' };
+const groqTr = texts => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ texts }) } }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+const trOk = await runAI({ action: 'translate', provider: 'auto', input: trInput, env: trEnv, fetchImpl: async (url, o) => { assert.match(String(url), /api.groq.com/); assert.match(JSON.parse(o.body).messages[0].content, /Kazakh/); return groqTr(['A', 'B']); } });
+assert.equal(trOk.provider, 'groq');
+assert.deepEqual(trOk.result.texts, ['A', 'B']);
+const trFallback = await runAI({ action: 'translate', provider: 'auto', input: trInput, env: trEnv, fetchImpl: async url => String(url).includes('groq')
+  ? groqTr(['only one'])
+  : new Response(JSON.stringify({ status: 'completed', steps: [{ type: 'model_output', content: [{ type: 'text', text: JSON.stringify({ texts: ['X', 'Y'] }) }] }] }), { status: 200, headers: { 'content-type': 'application/json' } }) });
+assert.equal(trFallback.provider, 'gemini', 'a bad Groq translation must fall through to Gemini');
+await assert.rejects(runAI({ action: 'translate', provider: 'auto', input: { language: 'fr', texts: ['a'] }, env: trEnv, fetchImpl: async () => { throw new Error('no call'); } }), /Для перевода нужен/);
+
+// Groq: when the default model is not available to the key, the function picks an available one.
+const modelCalls = [];
+const autoModel = await runAI({ action: 'translate', provider: 'groq', input: trInput, env: { GROQ_API_KEY: 'q' }, fetchImpl: async (url, o) => {
+  if (String(url).endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'whisper-large-v3' }, { id: 'llama-3.1-8b-instant' }, { id: 'openai/gpt-oss-120b' }] }), { status: 200, headers: { 'content-type': 'application/json' } });
+  const model = JSON.parse(o.body).model; modelCalls.push(model);
+  return model === 'openai/gpt-oss-120b' ? groqTr(['A', 'B']) : new Response(JSON.stringify({ error: { message: 'The model `' + model + '` does not exist or you do not have access to it.' } }), { status: 404, headers: { 'content-type': 'application/json' } });
+} });
+assert.deepEqual(autoModel.result.texts, ['A', 'B']);
+assert.deepEqual(modelCalls, ['llama-3.3-70b-versatile', 'openai/gpt-oss-120b']);
 console.log('PASS: provider selection, image validation, Gemini recognition, Cloudflare assessment, no AI feedback or translation, and explicit license handling');

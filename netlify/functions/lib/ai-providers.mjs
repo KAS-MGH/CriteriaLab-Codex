@@ -1,4 +1,5 @@
 const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash';
+const DEFAULT_GROQ_MODEL = 'llama-3.3-70b-versatile';
 const DEFAULT_CLOUDFLARE_OCR_MODEL = '@cf/moondream/moondream3.1-9B-A2B';
 const DEFAULT_CLOUDFLARE_ASSESS_MODEL = '@cf/meta/llama-3.1-8b-instruct-fast';
 const CLOUDFLARE_LLAMA32_MODEL = '@cf/meta/llama-3.2-11b-vision-instruct';
@@ -55,9 +56,9 @@ const assessmentSchema = {
 export function compactDescriptors(descriptors) {
   const out = [];
   for (let i = 0; i < descriptors.length;) {
-    const text = String(descriptors[i] ?? '').replace(/s+/g, ' ').trim();
+    const text = String(descriptors[i] ?? '').replace(/\s+/g, ' ').trim();
     let j = i;
-    while (j + 1 < descriptors.length && String(descriptors[j + 1] ?? '').replace(/s+/g, ' ').trim() === text) j++;
+    while (j + 1 < descriptors.length && String(descriptors[j + 1] ?? '').replace(/\s+/g, ' ').trim() === text) j++;
     if (text) out.push(`${i === j ? i : i + '-' + j}: ${text.length > 300 ? text.slice(0, 300) + '…' : text}`);
     i = j + 1;
   }
@@ -235,7 +236,150 @@ async function cloudflareRecognize({ prompt, image, env, fetchImpl }) {
   return { text: cleanPlainTranscription(text), warnings: ['Сверьте распознанный текст с оригиналом перед оцениванием.'] };
 }
 
-async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchImpl }) {
+// Models that answer in JSON mode, best first; the first one the key can use is chosen.
+const GROQ_PREFERENCE = [/llama-3.3-70b/, /llama-3.1-70b/, /gpt-oss-120b/, /llama-4/, /qwen/, /gpt-oss-20b/, /llama-3.1-8b/];
+const GROQ_EXCLUDED = /whisper|guard|tts|orpheus|playai|compound|embed|safeguard/;
+let groqWorkingModel = '';
+
+async function groqModelCandidates(apiKey, fetchImpl, skip) {
+  const response = await fetchImpl('https://api.groq.com/openai/v1/models', { headers: { authorization: `Bearer ${apiKey}` } });
+  const body = await responseJson(response, 'Groq');
+  const ids = (body?.data || []).map(item => item?.id).filter(id => typeof id === 'string' && !GROQ_EXCLUDED.test(id) && !skip.includes(id));
+  const ranked = [];
+  for (const pattern of GROQ_PREFERENCE) for (const id of ids) if (pattern.test(id) && !ranked.includes(id)) ranked.push(id);
+  return ranked.slice(0, 3);
+}
+
+// Groq (OpenAI-compatible chat API): fast Llama 70B, used first for comments and feedback.
+async function groqAssess({ prompt, env, fetchImpl }) {
+  const apiKey = env.GROQ_API_KEY;
+  if (!apiKey) throw new Error('На сервере не задан GROQ_API_KEY.');
+  const send = model => fetchImpl('https://api.groq.com/openai/v1/chat/completions', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 0,
+      max_tokens: 2500,
+      response_format: { type: 'json_object' }
+    })
+  });
+  const tried = [];
+  let model = env.GROQ_MODEL || groqWorkingModel || DEFAULT_GROQ_MODEL;
+  let queue = null, response;
+  for (;;) {
+    tried.push(model);
+    response = await send(model);
+    if (response.ok) break;
+    const errorBody = await response.clone().json().catch(() => null);
+    const message = errorBody?.error?.message || '';
+    // Only a missing or forbidden model is worth retrying with another model.
+    if (!(response.status === 404 || /model/i.test(message) && /not exist|no access|decommission|not found|not supported/i.test(message))) break;
+    queue ??= await groqModelCandidates(apiKey, fetchImpl, tried);
+    model = queue.shift();
+    if (!model) break;
+  }
+  const body = await responseJson(response, 'Groq');
+  groqWorkingModel = tried[tried.length - 1];
+  const text = body?.choices?.[0]?.message?.content;
+  if (typeof text !== 'string' || !text.trim()) throw new Error('Groq не вернул текстовый результат.');
+  return parseJson(text, 'Groq');
+}
+
+// Translation of the teacher-approved feedback texts into Russian or Kazakh (Groq first, Gemini as backup).
+const translateSchema = {
+  type: 'object',
+  properties: { texts: { type: 'array', items: { type: 'string' } } },
+  required: ['texts'],
+  additionalProperties: false
+};
+const LANGUAGE_NAMES = { ru: 'Russian', kk: 'Kazakh' };
+const TRANSLATE_PROVIDERS = ['groq', 'gemini'];
+
+function translatePrompt(input) {
+  return `Translate every string in TEXTS from English into ${LANGUAGE_NAMES[input.language]} for a school student's feedback.
+Keep the meaning, tone and length. Do not add, remove, merge or reorder items. Keep numbers, quotation marks and any English words inside quotes exactly as they are.
+Return JSON only: {"texts":["..."]} with exactly ${input.texts.length} strings in the same order.
+
+TEXTS:
+${JSON.stringify(input.texts)}`;
+}
+
+function normalizeTranslation(result, input) {
+  if (!result || !Array.isArray(result.texts) || result.texts.length !== input.texts.length || result.texts.some(item => typeof item !== 'string')) {
+    throw new Error('Модель вернула неполный перевод.');
+  }
+  return { texts: result.texts.map((item, index) => item.trim() || input.texts[index]) };
+}
+
+// The small Cloudflare model loses criteria when asked for everything at once,
+// so every criterion gets its own small request, plus one for remarks and the summary.
+const criterionSchema = {
+  type: 'object',
+  properties: { score: { type: 'integer' }, comment: { type: 'string' } },
+  required: ['score', 'comment'],
+  additionalProperties: false
+};
+const summarySchema = {
+  type: 'object',
+  properties: {
+    remarks: assessmentSchema.properties.remarks,
+    strengths: { type: 'string' }, priorities: { type: 'string' }, next: { type: 'string' }
+  },
+  required: ['remarks', 'strengths', 'priorities', 'next'],
+  additionalProperties: false
+};
+
+function taskContext(input) {
+  return JSON.stringify({ topic: input.topic || '', genre: input.genre || '', level: input.level || '', task: input.task || '', expectedLength: input.expectedLength || '' });
+}
+
+function criterionPrompt(input, index) {
+  const criterion = input.criteria[index];
+  return `You are assisting a teacher, not replacing their judgement. Assess the student text against ONE criterion only.
+Write the comment in English as one short sentence of at most 18 words. Use an integer score from 0 to ${criterion.max}.
+Return JSON only: {"score":0,"comment":"..."}
+
+TASK_CONTEXT:
+${taskContext(input)}
+
+CRITERION:
+${JSON.stringify({ name: criterion.name, max: criterion.max, descriptors: compactDescriptors(criterion.descriptors) })}
+
+STUDENT_TEXT:
+${input.text}`;
+}
+
+function summaryPrompt(input) {
+  return `You are assisting a teacher. Review the student text.
+Return no more than 3 remarks; every "quote" must be copied character-for-character from STUDENT_TEXT. Keep strengths, priorities and next to at most 20 words each, in English.
+Return JSON only: {"remarks":[{"quote":"exact source quote","correction":"...","explanation":"...","type":"error|style|uncertain","include":true}],"strengths":"...","priorities":"...","next":"..."}
+
+TASK_CONTEXT:
+${taskContext(input)}
+
+CRITERIA: ${JSON.stringify(input.criteria.map(criterion => criterion.name))}
+
+STUDENT_TEXT:
+${input.text}`;
+}
+
+async function cloudflareAssessSplit({ input, env, fetchImpl }) {
+  const jobs = [
+    ...input.criteria.map((_, index) => () => cloudflareAssess({ prompt: criterionPrompt(input, index), schema: criterionSchema, maxTokens: 300, env, fetchImpl })),
+    () => cloudflareAssess({ prompt: summaryPrompt(input), schema: summarySchema, maxTokens: 900, env, fetchImpl })
+  ];
+  const results = new Array(jobs.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(6, jobs.length) }, async () => {
+    while (next < jobs.length) { const i = next++; results[i] = await jobs[i](); }
+  }));
+  const summary = results.pop();
+  return { criteria: results.map((item, index) => ({ index, score: item?.score, comment: item?.comment })), ...summary };
+}
+
+async function cloudflareAssess({ prompt, schema = assessmentSchema, maxTokens = 1500, env, fetchImpl }) {
   const { accountId, token } = cloudflareCredentials(env);
   const model = env.CLOUDFLARE_ASSESS_MODEL || DEFAULT_CLOUDFLARE_ASSESS_MODEL;
   const endpoint = `https://api.cloudflare.com/client/v4/accounts/${encodeURIComponent(accountId)}/ai/run/${model}`;
@@ -247,7 +391,7 @@ async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchI
   const request = {
     prompt,
     temperature: 0,
-    max_tokens: 1500,
+    max_tokens: maxTokens,
     response_format: { type: 'json_schema', json_schema: schema }
   };
   let response = await fetchImpl(endpoint, options(request));
@@ -269,6 +413,8 @@ async function cloudflareAssess({ prompt, schema = assessmentSchema, env, fetchI
 function configured(provider, env) {
   return provider === 'vision'
     ? Boolean(env.GOOGLE_CLOUD_VISION_API_KEY)
+    : provider === 'groq'
+    ? Boolean(env.GROQ_API_KEY)
     : provider === 'gemini'
     ? Boolean(env.GEMINI_API_KEY)
     : provider === 'cloudflare'
@@ -277,7 +423,7 @@ function configured(provider, env) {
 }
 
 export function availableProviders(env = process.env) {
-  return ['gemini', 'cloudflare'].filter(provider => configured(provider, env));
+  return ['groq', 'gemini', 'cloudflare'].filter(provider => configured(provider, env));
 }
 
 // Providers usable for text recognition, in the order they are tried (no secrets exposed).
@@ -286,7 +432,7 @@ export function ocrProviders(env = process.env) {
 }
 
 export function selectProvider(requested, env = process.env) {
-  const allowed = ['auto', 'gemini', 'cloudflare'];
+  const allowed = ['auto', 'groq', 'gemini', 'cloudflare'];
   if (!allowed.includes(requested || 'auto') && requested !== 'vision') throw new Error('Неизвестный AI-провайдер.');
   if (requested && requested !== 'auto') {
     if (!configured(requested, env)) throw new Error(`Провайдер ${requested} не настроен на сервере.`);
@@ -305,6 +451,13 @@ function selectProviderForAction(action, requested, env) {
     if (configured('cloudflare', env)) return 'cloudflare';
     if (configured('gemini', env)) return 'gemini';
   }
+  if ((!requested || requested === 'auto') && action === 'translate') {
+    const first = TRANSLATE_PROVIDERS.find(name => configured(name, env));
+    if (!first) throw new Error('Для перевода на сервере не настроен ни один AI-провайдер.');
+    return first;
+  }
+  // Comments and feedback: Groq first whenever it is configured, regardless of AI_PROVIDER.
+  if ((!requested || requested === 'auto') && action === 'assess' && configured('groq', env)) return 'groq';
   return selectProvider(requested, env);
 }
 
@@ -354,13 +507,13 @@ function normalizeAssessment(result, input) {
 // With provider "auto" the preferred provider is tried first, the others only if it fails.
 // Not raced in parallel: the Gemini free tier allows only 20 requests per day.
 const FIRST_PROVIDER_MS = 20000; // leave time for the fallback provider
-const VALIDATION_ERRORS = /Для оценивания нужен|Для оценивания требуется|Критерии имеют|Поддерживаются изображения|не больше 4 МБ|Неизвестное AI-действие/;
+const VALIDATION_ERRORS = /Для оценивания нужен|Для оценивания требуется|Критерии имеют|Поддерживаются изображения|не больше 4 МБ|Для перевода нужен|Неизвестное AI-действие/;
 
 export async function runAI(request) {
   const { action, provider: requestedProvider = 'auto', env = process.env } = request;
   const first = selectProviderForAction(action, requestedProvider, env);
   const auto = !requestedProvider || requestedProvider === 'auto';
-  const pool = action === 'recognize' ? ['vision', 'cloudflare', 'gemini'].filter(name => configured(name, env)) : availableProviders(env);
+  const pool = action === 'recognize' ? ['vision', 'cloudflare', 'gemini'].filter(name => configured(name, env)) : action === 'translate' ? TRANSLATE_PROVIDERS.filter(name => configured(name, env)) : availableProviders(env);
   const providers = auto ? [first, ...pool.filter(name => name !== first)] : [first];
   const baseFetch = request.fetchImpl || fetch;
   const startedAt = Date.now();
@@ -395,6 +548,7 @@ export async function runAI(request) {
 
 async function runWithProvider(provider, { action, imageDataUrl, input, env = process.env, fetchImpl = fetch }) {
   if (action === 'recognize') {
+    if (provider === 'groq') throw new Error('Неизвестное AI-действие: Groq используется только для комментариев.');
     const image = parseImageDataUrl(imageDataUrl);
     const result = provider === 'vision'
       ? await visionRecognize({ image, env, fetchImpl })
@@ -411,10 +565,23 @@ async function runWithProvider(provider, { action, imageDataUrl, input, env = pr
       if (!criterion || typeof criterion.name !== 'string' || !Number.isInteger(criterion.max) || criterion.max < 1 || criterion.max > 20 || !Array.isArray(criterion.descriptors)) throw new Error('Критерии имеют неверный формат.');
     });
     const prompt = assessmentPrompt(input);
-    const result = provider === 'gemini'
+    const result = provider === 'groq'
+      ? await groqAssess({ prompt, env, fetchImpl })
+      : provider === 'gemini'
       ? await geminiGenerate({ prompt, schema: assessmentSchema, env, fetchImpl })
-      : await cloudflareAssess({ prompt, env, fetchImpl });
+      : await cloudflareAssessSplit({ input, env, fetchImpl });
     return { provider, action, result: normalizeAssessment(result, input) };
+  }
+  if (action === 'translate') {
+    if (!input || !LANGUAGE_NAMES[input.language] || !Array.isArray(input.texts) || input.texts.length < 1 || input.texts.length > 200 || input.texts.some(item => typeof item !== 'string') || JSON.stringify(input.texts).length > 30000) {
+      throw new Error('Для перевода нужен язык ru или kk и до 200 текстов.');
+    }
+    if (!TRANSLATE_PROVIDERS.includes(provider)) throw new Error('Неизвестное AI-действие: этот провайдер не выполняет перевод.');
+    const prompt = translatePrompt(input);
+    const result = provider === 'groq'
+      ? await groqAssess({ prompt, env, fetchImpl })
+      : await geminiGenerate({ prompt, schema: translateSchema, env, fetchImpl });
+    return { provider, action, result: normalizeTranslation(result, input) };
   }
   throw new Error('Неизвестное AI-действие.');
 }
